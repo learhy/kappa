@@ -1,0 +1,71 @@
+name: kappa
+usage: kappa [options]
+
+settings:
+  - DeriveDisplayOrder
+
+help_message: print help
+version_message: print version
+
+args:
+  - interface:
+      short: i
+      long: interface
+      help: network interface
+      takes_value: true
+      required: true
+      multiple: true
+  - email:
+      short: e
+      long: email
+      env: KENTIK_EMAIL
+      help: Kentik email address
+      takes_value: true
+      required: true
+  - token:
+      short: t
+      long: token
+      env: KENTIK_TOKEN
+      help: Kentik access token
+      takes_value: true
+      required: true
+  - device:
+      short: d
+      long: device
+      env: KENTIK_DEVICE
+      help: Kentik device name
+      takes_value: true
+      required: true
+  - plan:
+      long: plan
+      env: KENTIK_PLAN
+      help: Kentik device plan
+      takes_value: true
+  - region:
+      long: region
+      env: KENTIK_REGION
+      help: Kentik region
+      takes_value: true
+      default_value: "US"
+      required: true
+  - proxy:
+      long: proxy
+      env: PROXY
+      help: HTTP proxy
+      takes_value: true
+  - interval:
+      long: interval
+      help: export interval (s)
+      takes_value: true
+      default_value: "15"
+  - kernel:
+      long: kernel
+      env: KERNEL
+      help: kernel version
+      takes_value: true
+      value_name: x.y.z
+  - verbose:
+      short: v
+      long: verbose
+      help: verbose output
+      multiple: true

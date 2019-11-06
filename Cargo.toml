@@ -1,0 +1,53 @@
+[package]
+name    = "kappa"
+version = "0.0.1"
+authors = ["Will <will@kentik.com>"]
+edition = "2018"
+
+[dependencies]
+anyhow            = "1.0.13"
+capnp             = "0.10.1"
+crossbeam-channel = "0.3.9"
+errno             = "0.2.4"
+nixv              = "0.0.1"
+num_cpus          = "1.10.1"
+libc              = "0.2.65"
+log               = "0.4.8"
+pcap              = "0.7.0"
+pnet              = "0.22.0"
+rustls            = "0.16.0"
+serde_json        = "1.0.41"
+signal-hook       = "0.1.10"
+time              = "0.1.42"
+
+[dependencies.clap]
+version  = "2.33.0"
+features = ["yaml"]
+default-features = false
+
+[dependencies.env_logger]
+version  = "0.7.1"
+features = ["humantime"]
+default-features = false
+
+[dependencies.serde]
+version  = "1.0.101"
+features = ["derive"]
+
+[dependencies.tokio]
+version = "0.2.0-alpha.5"
+
+[dependencies.kentik-api]
+path = "./kentik-api"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+ebpf = "0.0.4"
+nixv = "0.0.1"
+perf = "0.0.2"
+
+[build-dependencies]
+capnpc = "0.10.1"
+
+[profile.release]
+lto   = false
+debug = true
