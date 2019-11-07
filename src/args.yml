@@ -8,13 +8,6 @@ help_message: print help
 version_message: print version
 
 args:
-  - interface:
-      short: i
-      long: interface
-      help: network interface
-      takes_value: true
-      required: true
-      multiple: true
   - email:
       short: e
       long: email
@@ -53,6 +46,20 @@ args:
       env: PROXY
       help: HTTP proxy
       takes_value: true
+  - capture:
+      short: c
+      long: capture
+      help: capture interfaces
+      takes_value: true
+      required: true
+      multiple: true
+      value_name: PATTERN
+  - exclude:
+      long: exclude
+      help: exclude interfaces
+      takes_value: true
+      multiple: true
+      value_name: PATTERN
   - interval:
       long: interval
       help: export interval (s)

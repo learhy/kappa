@@ -40,5 +40,5 @@ pub use backend::*;
 mod backend;
 
 #[cfg(not(target_os = "linux"))]
-#[path = "empty.rs"]
+#[path = "empty/mod.rs"]
 mod backend;

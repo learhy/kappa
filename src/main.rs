@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use std::env;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -8,15 +7,17 @@ use anyhow::Result;
 use clap::{App, load_yaml, value_t, values_t};
 use crossbeam_channel::bounded;
 use env_logger::Builder;
-use log::info;
+use log::{info, warn};
 use log::LevelFilter::*;
 use nixv::Version;
-use pcap::Capture;
+use regex::Regex;
 use signal_hook::{flag::register, SIGINT, SIGTERM};
 use kentik_api::Client;
-use kappa::capture::{self, Source};
+use kappa::capture::{self, Sources};
 use kappa::export::Export;
-use kappa::process::Monitor;
+use kappa::link::{self, Links};
+use kappa::probes;
+use kappa::process::Socks;
 
 fn main() -> Result<()> {
     let yaml = load_yaml!("args.yml");
@@ -33,15 +34,19 @@ fn main() -> Result<()> {
     let kernel = args.value_of("kernel").and_then(Version::parse);
 
     let interval = value_t!(args, "interval", u64)?;
-    let captures = values_t!(args, "interface", String)?.into_iter().map(|name| {
-        let (mac, dev) = capture::lookup(&name)?;
-        let cap = Capture::from_device(dev)?
-            .buffer_size(10_000_000)
-            .timeout((interval * 1000).try_into()?)
-            .snaplen(128)
-            .promisc(true);
-        Ok(Source::new(cap, mac, name))
-    }).collect::<Result<Vec<_>>>()?;
+    let capture  = values_t!(args, "capture", String)?.join("|");
+    let exclude  = args.values_of("exclude").map(|vs| {
+        vs.map(String::from).collect::<Vec<_>>().join("|")
+    }).unwrap_or_else(|| "^$".to_string());
+
+    let config  = capture::Config {
+        capture:     Regex::new(&capture)?,
+        exclude:     Regex::new(&exclude)?,
+        interval:    Duration::from_secs(interval),
+        buffer_size: 10_000_000,
+        snaplen:     128,
+        promisc:     true,
+    };
 
     let (module, level) = match args.occurrences_of("verbose") {
         0 => (Some(module_path!()), Info),
@@ -60,13 +65,11 @@ fn main() -> Result<()> {
     let client = Client::new(&email, &token, region);
 
     let mut export  = Export::new(client, &device, plan)?;
-    let mut monitor = Monitor::start(kernel, shutdown.clone())?;
+    let mut sockets = Socks::watch(kernel, shutdown.clone())?;
+    let mut links   = Links::watch(shutdown.clone())?;
 
     let (tx, rx) = bounded(1_000);
-    let captures = captures.into_iter().map(|source| {
-        let interval = Duration::from_secs(interval);
-        source.start(interval, tx.clone())
-    }).collect::<Result<Vec<_>>>()?;
+    let mut sources = Sources::new(config, tx);
 
     let timeout = Duration::from_millis(1);
 
@@ -75,9 +78,20 @@ fn main() -> Result<()> {
             export.export(flows)?;
         }
 
-        while let Ok(Some(event)) = monitor.recv() {
+        while let Ok(Some(event)) = sockets.recv() {
             export.record(event);
         }
+
+        while let Ok(Some(event)) = links.recv() {
+            match event {
+                link::Event::Add(link, mac) => sources.add(link, mac)?,
+                link::Event::Del(link)      => sources.del(link),
+            }
+        }
+    }
+
+    if let Err(e) = probes::clear() {
+        warn!("failed to clear probes {:?}", e);
     }
 
     Ok(())
