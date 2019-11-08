@@ -33,12 +33,12 @@ pub enum Kind {
     Close,
 }
 
-pub use backend::*;
+pub use monitor::Socks;
 
 #[cfg(target_os = "linux")]
 #[path = "linux/mod.rs"]
-mod backend;
+mod monitor;
 
 #[cfg(not(target_os = "linux"))]
-#[path = "empty/mod.rs"]
-mod backend;
+#[path = "monitor.rs"]
+mod monitor;
