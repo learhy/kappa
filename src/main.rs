@@ -7,6 +7,7 @@ use anyhow::Result;
 use clap::{App, load_yaml, value_t, values_t};
 use crossbeam_channel::bounded;
 use env_logger::Builder;
+use jemallocator::Jemalloc;
 use log::{info, warn};
 use log::LevelFilter::*;
 use nixv::Version;
@@ -18,6 +19,9 @@ use kappa::export::Export;
 use kappa::link::{self, Links};
 use kappa::probes;
 use kappa::process::Socks;
+
+#[global_allocator]
+static ALLOC: Jemalloc = Jemalloc;
 
 fn main() -> Result<()> {
     let yaml = load_yaml!("args.yml");

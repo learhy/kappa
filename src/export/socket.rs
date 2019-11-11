@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use log::debug;
 use crate::process::{Event, Process, Kind};
 
 #[derive(Debug, Hash, Eq, PartialEq)]
@@ -36,9 +37,14 @@ impl Sockets {
     }
 
     fn insert(&mut self, key: Key, proc: Process) {
-        self.socks.insert(key, Entry {
-            proc:   proc,
-            closed: false,
+        let src = key.0;
+        let dst = key.1;
+        self.socks.entry(key).or_insert_with(|| {
+            debug!("{} -> {}: {} ({})", src, dst, proc.comm, proc.pid);
+            Entry {
+                proc:   proc,
+                closed: false,
+            }
         });
     }
 
