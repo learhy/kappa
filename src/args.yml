@@ -60,6 +60,11 @@ args:
       takes_value: true
       multiple: true
       value_name: PATTERN
+  - sample:
+      long: sample
+      help: sample rate
+      takes_value: true
+      value_name: "1:N"
   - interval:
       long: interval
       help: export interval (s)

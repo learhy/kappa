@@ -26,6 +26,7 @@ pub struct Flow {
     pub packets:   usize,
     pub fragments: u16,
     pub bytes:     usize,
+    pub sample:    u32,
     pub direction: Direction,
 }
 

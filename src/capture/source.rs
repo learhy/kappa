@@ -7,7 +7,7 @@ use crossbeam_channel::Sender;
 use log::{debug, info, warn};
 use parking_lot::Mutex;
 use pcap::{Capture, Active};
-use super::config::{capture, Config};
+use super::{capture, Config, Sample};
 use super::queue::Queue;
 use super::flow::{Flow, Timestamp};
 use pnet::util::MacAddr;
@@ -41,19 +41,25 @@ impl Sources {
         };
 
         let interval = time::Duration::from_std(self.cfg.interval)?;
-        let queue    = Queue::new(mac, self.tx.clone(), interval);
+        let sample   = match self.cfg.sample {
+            Sample::Rate(n) => n,
+            Sample::None    => 1,
+        };
+        let sender   = self.tx.clone();
+
+        let queue    = Queue::new(mac, sample, sender, interval);
         let mut task = Task::new(cap, queue);
 
         let source = Source { stop: task.stop.clone() };
         let map    = self.map.clone();
         self.map.lock().insert(link.clone(), source);
 
-        info!("starting capture on {}", link);
+        info!("starting {} capture", link);
 
         thread::spawn(move || {
             match task.poll() {
-                Ok(()) => debug!("capture on {} finished", link),
-                Err(e) => warn!("capture on {} stopped: {:?}", link, e),
+                Ok(()) => debug!("capture {} finished", link),
+                Err(e) => warn!("capture {} stopped: {:?}", link, e),
             };
             map.lock().remove(&link);
         });

@@ -43,6 +43,7 @@ version = "0.2.0-alpha.5"
 path = "./kentik-api"
 
 [target.'cfg(target_os = "linux")'.dependencies]
+bpf  = "0.1.3"
 ebpf = "0.0.4"
 nell = "0.2.0"
 nixv = "0.0.1"

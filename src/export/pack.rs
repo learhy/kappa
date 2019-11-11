@@ -59,6 +59,7 @@ pub fn pack(device: &Device, socks: &Sockets, flows: Vec<Flow>) -> Result<Vec<u8
         msg.set_l4_dst_port(flow.dst.port as u32);
         msg.set_tos(flow.tos as u32);
         msg.set_tcp_flags(flow.tcp_flags() as u32);
+        msg.set_sample_rate(flow.sample);
 
         match flow.direction {
             Direction::In => {

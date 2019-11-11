@@ -13,7 +13,7 @@ use nixv::Version;
 use regex::Regex;
 use signal_hook::{flag::register, SIGINT, SIGTERM};
 use kentik_api::Client;
-use kappa::capture::{self, Sources};
+use kappa::capture::{self, Sample, Sources};
 use kappa::export::Export;
 use kappa::link::{self, Links};
 use kappa::probes;
@@ -34,6 +34,8 @@ fn main() -> Result<()> {
     let kernel = args.value_of("kernel").and_then(Version::parse);
 
     let interval = value_t!(args, "interval", u64)?;
+    let sample   = opt(args.value_of("sample"))?.unwrap_or(Sample::None);
+
     let capture  = values_t!(args, "capture", String)?.join("|");
     let exclude  = args.values_of("exclude").map(|vs| {
         vs.map(String::from).collect::<Vec<_>>().join("|")
@@ -44,6 +46,7 @@ fn main() -> Result<()> {
         exclude:     Regex::new(&exclude)?,
         interval:    Duration::from_secs(interval),
         buffer_size: 10_000_000,
+        sample:      sample,
         snaplen:     128,
         promisc:     true,
     };

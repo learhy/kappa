@@ -1,14 +1,17 @@
-pub mod config;
 pub mod decode;
 pub mod flow;
 pub mod queue;
-pub mod source;
 pub mod timer;
 
-pub use config::Config;
+pub use config::{capture, Config};
 pub use decode::decode;
 pub use flow::{Addr, Direction, Flow, Protocol};
+pub use sample::Sample;
 pub use source::Sources;
+
+mod config;
+mod sample;
+mod source;
 
 #[cfg(test)]
 mod test;
