@@ -1,3 +1,5 @@
+pub mod probe;
+
 pub mod capture;
 pub mod export;
 pub mod link;

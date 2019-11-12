@@ -1,83 +1,94 @@
 name: kappa
-usage: kappa [options]
+usage: kappa [options] <command>
 
 settings:
+  - SubcommandRequiredElseHelp
+  - DisableHelpSubcommand
+  - VersionlessSubcommands
+
+global_settings:
   - DeriveDisplayOrder
 
 help_message: print help
 version_message: print version
 
 args:
-  - email:
-      short: e
-      long: email
-      env: KENTIK_EMAIL
-      help: Kentik email address
-      takes_value: true
-      required: true
-  - token:
-      short: t
-      long: token
-      env: KENTIK_TOKEN
-      help: Kentik access token
-      takes_value: true
-      required: true
-  - device:
-      short: d
-      long: device
-      env: KENTIK_DEVICE
-      help: Kentik device name
-      takes_value: true
-      required: true
-  - plan:
-      long: plan
-      env: KENTIK_PLAN
-      help: Kentik device plan
-      takes_value: true
-  - region:
-      long: region
-      env: KENTIK_REGION
-      help: Kentik region
-      takes_value: true
-      default_value: "US"
-      required: true
-  - proxy:
-      long: proxy
-      env: PROXY
-      help: HTTP proxy
-      takes_value: true
-  - capture:
-      short: c
-      long: capture
-      help: capture interfaces
-      takes_value: true
-      required: true
-      multiple: true
-      value_name: PATTERN
-  - exclude:
-      long: exclude
-      help: exclude interfaces
-      takes_value: true
-      multiple: true
-      value_name: PATTERN
-  - sample:
-      long: sample
-      help: sample rate
-      takes_value: true
-      value_name: "1:N"
-  - interval:
-      long: interval
-      help: export interval (s)
-      takes_value: true
-      default_value: "15"
-  - kernel:
-      long: kernel
-      env: KERNEL
-      help: kernel version
-      takes_value: true
-      value_name: x.y.z
   - verbose:
       short: v
       long: verbose
       help: verbose output
       multiple: true
+
+subcommands:
+  - probe:
+      usage: kappa probe [options]
+      help_message: print help
+      args:
+        - email:
+            short: e
+            long: email
+            env: KENTIK_EMAIL
+            help: Kentik email address
+            takes_value: true
+            required: true
+        - token:
+            short: t
+            long: token
+            env: KENTIK_TOKEN
+            help: Kentik access token
+            takes_value: true
+            required: true
+        - device:
+            short: d
+            long: device
+            env: KENTIK_DEVICE
+            help: Kentik device name
+            takes_value: true
+            required: true
+        - plan:
+            long: plan
+            env: KENTIK_PLAN
+            help: Kentik device plan
+            takes_value: true
+        - region:
+            long: region
+            env: KENTIK_REGION
+            help: Kentik region
+            takes_value: true
+            default_value: "US"
+            required: true
+        - proxy:
+            long: proxy
+            env: PROXY
+            help: HTTP proxy
+            takes_value: true
+        - capture:
+            short: c
+            long: capture
+            help: capture interfaces
+            takes_value: true
+            required: true
+            multiple: true
+            value_name: PATTERN
+        - exclude:
+            long: exclude
+            help: exclude interfaces
+            takes_value: true
+            multiple: true
+            value_name: PATTERN
+        - sample:
+            long: sample
+            help: sample rate
+            takes_value: true
+            value_name: "1:N"
+        - interval:
+            long: interval
+            help: export interval (s)
+            takes_value: true
+            default_value: "15"
+        - kernel:
+            long: kernel
+            env: KERNEL
+            help: kernel version
+            takes_value: true
+            value_name: x.y.z
