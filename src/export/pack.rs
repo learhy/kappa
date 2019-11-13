@@ -5,7 +5,7 @@ use pnet::{packet::PrimitiveValues, util::MacAddr};
 use kentik_api::Device;
 use crate::chf_capnp::*;
 use crate::capture::{Direction, Flow, Protocol};
-use super::Sockets;
+use crate::sockets::Sockets;
 
 pub fn pack(device: &Device, socks: &Sockets, flows: Vec<Flow>) -> Result<Vec<u8>> {
     let column = |name: &str| {
@@ -29,7 +29,7 @@ pub fn pack(device: &Device, socks: &Sockets, flows: Vec<Flow>) -> Result<Vec<u8
     let root = msg.init_root::<packed_c_h_f::Builder>();
     let mut msgs = root.init_msgs(flows.len() as u32);
 
-    for (index, flow) in flows.iter().enumerate() {
+    for (index, (flow, proc)) in socks.merge(flows).iter().enumerate() {
         let mut msg = msgs.reborrow().get(index as u32);
 
         let src_eth_mac = pack_mac(&flow.ethernet.src);
@@ -76,14 +76,7 @@ pub fn pack(device: &Device, socks: &Sockets, flows: Vec<Flow>) -> Result<Vec<u8
             }
         };
 
-        let src  = (flow.src.addr, flow.src.port).into();
-        let dst  = (flow.dst.addr, flow.dst.port).into();
-        let key  = match flow.direction {
-            Direction::In                       => (dst, src),
-            Direction::Out | Direction::Unknown => (src, dst),
-        };
-
-        if let Some(proc) = socks.lookup(key) {
+        if let Some(proc) = proc {
             log::trace!("{} -> {}: {} ({})", flow.src, flow.dst, proc.comm, proc.pid);
 
             let count = match proc.container {

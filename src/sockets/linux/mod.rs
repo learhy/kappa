@@ -1,5 +1,5 @@
 pub use lookup::lookup;
-pub use monitor::Socks;
+pub use monitor::Procs;
 pub use super::{Event, Kind};
 
 mod cache;

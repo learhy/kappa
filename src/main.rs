@@ -13,7 +13,6 @@ static ALLOC: Jemalloc = Jemalloc;
 
 fn main() -> Result<()> {
     let yaml = load_yaml!("args.yml");
-
     let ver  = env!("CARGO_PKG_VERSION");
     let args = App::from_yaml(&yaml).version(ver).get_matches();
 

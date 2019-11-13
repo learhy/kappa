@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -10,11 +9,12 @@ use nixv::Version;
 use regex::Regex;
 use signal_hook::{flag::register, SIGINT, SIGTERM};
 use kentik_api::Client;
+use crate::args::opt;
 use crate::capture::{self, Sample, Sources};
 use crate::export::Export;
 use crate::link::{self, Links};
 use crate::probes;
-use crate::process::Socks;
+use crate::sockets::Procs;
 
 pub fn probe(args: &ArgMatches) -> Result<()> {
     let email  = value_t!(args, "email",  String)?;
@@ -50,9 +50,9 @@ pub fn probe(args: &ArgMatches) -> Result<()> {
 
     let client = Client::new(&email, &token, region);
 
-    let mut export  = Export::new(client, &device, plan)?;
-    let mut sockets = Socks::watch(kernel, shutdown.clone())?;
-    let mut links   = Links::watch(shutdown.clone())?;
+    let procs      = Procs::watch(kernel, shutdown.clone())?;
+    let mut links  = Links::watch(shutdown.clone())?;
+    let mut export = Export::new(client, &device, plan, procs.sockets())?;
 
     let (tx, rx) = bounded(1_000);
     let mut sources = Sources::new(config, tx);
@@ -62,10 +62,6 @@ pub fn probe(args: &ArgMatches) -> Result<()> {
     while !shutdown.load(Ordering::Acquire) {
         if let Ok(flows) = rx.recv_timeout(timeout) {
             export.export(flows)?;
-        }
-
-        while let Ok(Some(event)) = sockets.recv() {
-            export.record(event);
         }
 
         while let Ok(Some(event)) = links.recv() {
@@ -81,12 +77,4 @@ pub fn probe(args: &ArgMatches) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn opt<T: FromStr>(arg: Option<&str>) -> Result<Option<T>> {
-    Ok(arg.map(|s| T::from_str(s).map_err(|_| {
-        let msg  = format!("invalid argument value '{}'", s);
-        let kind = clap::ErrorKind::InvalidValue;
-        clap::Error::with_description(&msg, kind)
-    })).transpose()?)
 }

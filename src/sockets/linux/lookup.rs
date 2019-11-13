@@ -1,7 +1,7 @@
 use std::fs::{self, File};
 use std::io::{prelude::*, BufReader, ErrorKind};
 use anyhow::Result;
-use crate::process::{Process, CGroup};
+use crate::sockets::{Process, CGroup};
 
 pub fn lookup(pid: u32) -> Result<Process> {
     let comm    = or_default(comm(pid))?;

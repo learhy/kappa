@@ -1,34 +1,35 @@
+use std::sync::Arc;
 use anyhow::Result;
 use log::{debug, warn};
 use tokio::runtime::Runtime;
 use kentik_api::{Client, Device};
 use kentik_api::Error::*;
 use crate::capture::Flow;
-use crate::process::Event;
-use super::{Sockets, pack};
+use crate::sockets::{Event, Sockets};
+use super::pack;
 
 pub struct Export {
     client: Client,
     device: Device,
     rt:     Runtime,
-    socks:  Sockets,
+    socks:  Arc<Sockets>,
 }
 
 impl Export {
-    pub fn new(client: Client, device: &str, plan: Option<u64>) -> Result<Self> {
+    pub fn new(client: Client, device: &str, plan: Option<u64>, socks: Arc<Sockets>) -> Result<Self> {
         let rt     = Runtime::new()?;
         let device = rt.block_on(get_or_create_device(&client, &device, plan))?;
         Ok(Self {
             client: client,
             device: device,
             rt:     rt,
-            socks:  Sockets::new(),
+            socks:  socks,
         })
     }
 
     pub fn export(&mut self, flows: Vec<Flow>) -> Result<()> {
         debug!("exporting {} flows", flows.len());
-        let msg = pack(&self.device, &self.socks, flows)?;
+        let msg = pack(&self.device, &*self.socks, flows)?;
 
         // FIXME: don't want these clones
         let client = self.client.clone();

@@ -1,24 +1,16 @@
 use std::mem::size_of;
-use std::net::Ipv4Addr;
 use std::os::raw::c_int;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread::{self, JoinHandle};
 use anyhow::Result;
-use crossbeam_channel::{Sender, Receiver, bounded};
 use ebpf::bpf::Program;
 use ebpf::elf::{self, Map};
 use ebpf::ffi::{bpf_map_create_arg};
 use ebpf::ffi::bpf_map_type::BPF_MAP_TYPE_PERF_EVENT_ARRAY;
-use log::{debug, error, warn};
+use log::{debug, warn};
 use nixv::{Version, kernel};
-use perf::map::Event;
 use perf::sys::*;
 use perf::ffi::*;
-use super::Socket;
 use super::version::LinuxVersionCode;
 use super::events;
-use super::poll::Poll;
 
 pub struct Probes {
     programs: Vec<Program>,
@@ -58,7 +50,7 @@ impl Probes {
         })
     }
 
-    pub fn start(&self, shutdown: Arc<AtomicBool>) -> Result<(Receiver<Socket>, JoinHandle<()>)> {
+    pub fn open(&self) -> Result<Vec<c_int>> {
         let cpus = num_cpus::get();
 
         for prog in &self.programs {
@@ -71,13 +63,13 @@ impl Probes {
             prog.maps.iter().find(|map| map.name == "events")
         }).next().unwrap();
 
-        let fds = (0..cpus).map(|n| {
+        (0..cpus).map(|n| {
             let mut attr = perf_event_attr::default();
-            attr.type_        = PERF_TYPE_SOFTWARE;
-            attr.config       = PERF_COUNT_SW_BPF_OUTPUT;
-            attr.sample_type  = PERF_SAMPLE_RAW;
-            attr.sample       = perf_event_sample_arg { sample_period: 1 };
-            attr.wakeup       = perf_event_wakeup_arg { wakeup_events: 1 };
+            attr.type_       = PERF_TYPE_SOFTWARE;
+            attr.config      = PERF_COUNT_SW_BPF_OUTPUT;
+            attr.sample_type = PERF_SAMPLE_RAW;
+            attr.sample      = perf_event_sample_arg { sample_period: 1 };
+            attr.wakeup      = perf_event_wakeup_arg { wakeup_events: 1 };
 
             let pid = -1;
             let cpu = n as i32;
@@ -87,57 +79,6 @@ impl Probes {
             map.insert(&cpu, &fd)?;
 
             Ok(fd)
-        }).collect::<Result<Vec<c_int>>>()?;
-
-        let (tx, rx) = bounded(1024);
-
-        let task = || match poll(fds, tx, shutdown) {
-            Ok(()) => (),
-            Err(e) => error!("probe poll failed: {:?}", e),
-        };
-
-        Ok((rx, thread::spawn(task)))
+        }).collect::<Result<Vec<c_int>>>()
     }
-}
-
-fn poll(fds: Vec<c_int>, tx: Sender<Socket>, shutdown: Arc<AtomicBool>) -> Result<()> {
-    // TODO: munmap and close on drop?
-    let mut maps = Vec::with_capacity(fds.len());
-    let mut poll = Poll::new(&fds, 64).unwrap();
-
-    while !shutdown.load(Ordering::Acquire) {
-        let n = poll.poll(&mut maps, -1).unwrap();
-        for map in &mut maps[..n] {
-            #[repr(C)]
-            #[derive(Debug)]
-            struct Data {
-                event: u32,
-                pid:   u32,
-                saddr: u32,
-                sport: u32,
-                daddr: u32,
-                dport: u32,
-            }
-
-            let mut events = map.events::<Data>();
-            while let Some(event) = events.next() {
-                if let Event::Event(data) = event {
-                    let pid = data.pid as u32;
-                    let src = (Ipv4Addr::from(data.saddr.to_be()), data.sport as u16).into();
-                    let dst = (Ipv4Addr::from(data.daddr.to_be()), data.dport as u16).into();
-
-                    tx.send(match data.event {
-                        1 => Socket::Connect(pid, src, dst),
-                        2 => Socket::Accept(pid, src, dst),
-                        3 => Socket::Close(pid, src, dst),
-                        n => panic!("bad event type: {}", n),
-                    })?;
-                } else {
-                    warn!("unhandled event {:?}", event);
-                }
-            }
-        }
-    }
-
-    Ok(())
 }

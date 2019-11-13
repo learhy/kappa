@@ -1,10 +1,11 @@
 pub mod probe;
 
+pub mod args;
 pub mod capture;
 pub mod export;
 pub mod link;
 pub mod packet;
-pub mod process;
+pub mod sockets;
 
 pub mod chf_capnp {
     include!(concat!(env!("OUT_DIR"), "/chf_capnp.rs"));

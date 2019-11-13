@@ -5,7 +5,7 @@ pub mod timer;
 
 pub use config::{capture, Config};
 pub use decode::decode;
-pub use flow::{Addr, Direction, Flow, Protocol};
+pub use flow::{Addr, Direction, Flow, Key, Protocol};
 pub use sample::Sample;
 pub use source::Sources;
 

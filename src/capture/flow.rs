@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::fmt;
 use std::mem;
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::ops::{Add, Sub};
 use std::ptr;
 use libc::{self, timeval};
@@ -209,5 +209,14 @@ pub fn tcp_window(p: &TcpPacket) -> Window {
     Window {
         size:  p.get_window() as u32,
         scale: scale,
+    }
+}
+
+impl From<SocketAddr> for Addr {
+    fn from(sa: SocketAddr) -> Self {
+        Self {
+            addr: sa.ip(),
+            port: sa.port(),
+        }
     }
 }

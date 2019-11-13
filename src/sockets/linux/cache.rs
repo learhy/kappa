@@ -3,7 +3,7 @@ use std::collections::hash_map::{Entry, VacantEntry};
 use std::time::{Duration, Instant};
 use log::{log_enabled, trace, warn};
 use log::Level::Trace;
-use crate::process::Process;
+use crate::sockets::Process;
 use super::lookup;
 
 pub struct Cache {

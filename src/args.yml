@@ -18,6 +18,7 @@ args:
       long: verbose
       help: verbose output
       multiple: true
+      global: true
 
 subcommands:
   - probe:
@@ -67,14 +68,16 @@ subcommands:
             long: capture
             help: capture interfaces
             takes_value: true
-            required: true
             multiple: true
+            number_of_values: 1
             value_name: PATTERN
+            required: true
         - exclude:
             long: exclude
             help: exclude interfaces
             takes_value: true
             multiple: true
+            number_of_values: 1
             value_name: PATTERN
         - sample:
             long: sample

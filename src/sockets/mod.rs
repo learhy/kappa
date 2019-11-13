@@ -1,5 +1,12 @@
 use std::net::SocketAddr;
+use std::sync::Arc;
 use serde::{Serialize, Deserialize};
+
+#[derive(Debug)]
+pub struct Socket {
+    proc:   Arc<Process>,
+    closed: bool,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Process {
@@ -17,7 +24,6 @@ pub struct CGroup {
     pub path:        String,
 }
 
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Event {
     pub proc: Process,
@@ -33,7 +39,10 @@ pub enum Kind {
     Close,
 }
 
-pub use monitor::Socks;
+pub use monitor::Procs;
+pub use sockets::Sockets;
+
+mod sockets;
 
 #[cfg(target_os = "linux")]
 #[path = "linux/mod.rs"]
