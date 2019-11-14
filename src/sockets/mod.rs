@@ -1,14 +1,7 @@
 use std::net::SocketAddr;
-use std::sync::Arc;
 use serde::{Serialize, Deserialize};
 
-#[derive(Debug)]
-pub struct Socket {
-    proc:   Arc<Process>,
-    closed: bool,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct Process {
     pub comm:      String,
     pub cmdline:   Vec<String>,
@@ -17,7 +10,7 @@ pub struct Process {
     pub container: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct CGroup {
     pub hierarchy:   u32,
     pub controllers: Vec<String>,

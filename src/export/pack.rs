@@ -5,6 +5,7 @@ use pnet::{packet::PrimitiveValues, util::MacAddr};
 use kentik_api::Device;
 use crate::chf_capnp::*;
 use crate::capture::{Direction, Flow, Protocol};
+use crate::collect::Record;
 use crate::sockets::Sockets;
 
 pub fn pack(device: &Device, socks: &Sockets, flows: Vec<Flow>) -> Result<Vec<u8>> {
@@ -29,7 +30,7 @@ pub fn pack(device: &Device, socks: &Sockets, flows: Vec<Flow>) -> Result<Vec<u8
     let root = msg.init_root::<packed_c_h_f::Builder>();
     let mut msgs = root.init_msgs(flows.len() as u32);
 
-    for (index, (flow, proc)) in socks.merge(flows).iter().enumerate() {
+    for (index, Record { flow, src, dst }) in socks.merge(flows).iter().enumerate() {
         let mut msg = msgs.reborrow().get(index as u32);
 
         let src_eth_mac = pack_mac(&flow.ethernet.src);
@@ -76,66 +77,87 @@ pub fn pack(device: &Device, socks: &Sockets, flows: Vec<Flow>) -> Result<Vec<u8
             }
         };
 
-        if let Some(proc) = proc {
-            log::trace!("{} -> {}: {} ({})", flow.src, flow.dst, proc.comm, proc.pid);
+        let mut count = 0;
+        let mut index = 0;
 
-            let count = match proc.container {
+        if let Some(proc) = src {
+            count += match proc.container {
                 Some(_) => 4,
                 None    => 3,
-            };
+            }
+        }
 
-            let mut customs = msg.init_custom(count);
+        if let Some(proc) = dst {
+            count += match proc.container {
+                Some(_) => 4,
+                None    => 3,
+            }
+        }
 
-            if flow.direction == Direction::In {
-                {
-                    let mut dst_proc_pid = customs.reborrow().get(0);
-                    dst_proc_pid.set_id(int02);
-                    dst_proc_pid.init_value().set_uint32_val(proc.pid);
-                }
+        let mut customs = msg.init_custom(count);
 
-                {
-                    let mut dst_proc_name = customs.reborrow().get(1);
-                    dst_proc_name.set_id(str03);
-                    dst_proc_name.init_value().set_str_val(&proc.comm);
-                }
+        if let Some(proc) = src {
+            log::trace!("{} -> {}: {} ({})", flow.src, flow.dst, proc.comm, proc.pid);
 
-                {
-                    let cmdline = proc.cmdline.join(" ");
-                    let mut dst_proc_cmdline = customs.reborrow().get(2);
-                    dst_proc_cmdline.set_id(str04);
-                    dst_proc_cmdline.init_value().set_str_val(&cmdline);
-                }
+            {
+                let mut src_proc_pid = customs.reborrow().get(index);
+                src_proc_pid.set_id(int01);
+                src_proc_pid.init_value().set_uint32_val(proc.pid);
+                index += 1;
+            }
 
-                if let Some(id) = &proc.container {
-                    let mut dst_proc_cont_id = customs.reborrow().get(3);
-                    dst_proc_cont_id.set_id(str05);
-                    dst_proc_cont_id.init_value().set_str_val(&id);
-                }
-            } else {
-                {
-                    let mut src_proc_pid = customs.reborrow().get(0);
-                    src_proc_pid.set_id(int01);
-                    src_proc_pid.init_value().set_uint32_val(proc.pid);
-                }
+            {
+                let mut src_proc_name = customs.reborrow().get(index);
+                src_proc_name.set_id(str00);
+                src_proc_name.init_value().set_str_val(&proc.comm);
+                index += 1;
+            }
 
-                {
-                    let mut src_proc_name = customs.reborrow().get(1);
-                    src_proc_name.set_id(str00);
-                    src_proc_name.init_value().set_str_val(&proc.comm);
-                }
+            {
+                let cmdline = proc.cmdline.join(" ");
+                let mut src_proc_cmdline = customs.reborrow().get(index);
+                src_proc_cmdline.set_id(str01);
+                src_proc_cmdline.init_value().set_str_val(&cmdline);
+                index += 1;
+            }
 
-                {
-                    let cmdline = proc.cmdline.join(" ");
-                    let mut src_proc_cmdline = customs.reborrow().get(2);
-                    src_proc_cmdline.set_id(str01);
-                    src_proc_cmdline.init_value().set_str_val(&cmdline);
-                }
+            if let Some(id) = &proc.container {
+                let mut src_proc_cont_id = customs.reborrow().get(index);
+                src_proc_cont_id.set_id(str02);
+                src_proc_cont_id.init_value().set_str_val(&id);
+                index += 1;
+            }
+        }
 
-                if let Some(id) = &proc.container {
-                    let mut src_proc_cont_id = customs.reborrow().get(3);
-                    src_proc_cont_id.set_id(str02);
-                    src_proc_cont_id.init_value().set_str_val(&id);
-                }
+        if let Some(proc) = dst {
+            log::trace!("{} -> {}: {} ({})", flow.src, flow.dst, proc.comm, proc.pid);
+
+            {
+                let mut dst_proc_pid = customs.reborrow().get(index);
+                dst_proc_pid.set_id(int02);
+                dst_proc_pid.init_value().set_uint32_val(proc.pid);
+                index += 1;
+            }
+
+            {
+                let mut dst_proc_name = customs.reborrow().get(index);
+                dst_proc_name.set_id(str03);
+                dst_proc_name.init_value().set_str_val(&proc.comm);
+                index += 1;
+            }
+
+            {
+                let cmdline = proc.cmdline.join(" ");
+                let mut dst_proc_cmdline = customs.reborrow().get(index);
+                dst_proc_cmdline.set_id(str04);
+                dst_proc_cmdline.init_value().set_str_val(&cmdline);
+                index += 1;
+            }
+
+            if let Some(id) = &proc.container {
+                let mut dst_proc_cont_id = customs.reborrow().get(index);
+                dst_proc_cont_id.set_id(str05);
+                dst_proc_cont_id.init_value().set_str_val(&id);
             }
         }
     }

@@ -21,6 +21,47 @@ args:
       global: true
 
 subcommands:
+  - agent:
+      usage: kappa agent [options] <host:port>
+      help_message: print help
+      args:
+        - capture:
+            short: c
+            long: capture
+            help: capture interfaces
+            takes_value: true
+            multiple: true
+            number_of_values: 1
+            value_name: PATTERN
+            required: true
+        - exclude:
+            long: exclude
+            help: exclude interfaces
+            takes_value: true
+            multiple: true
+            number_of_values: 1
+            value_name: PATTERN
+        - sample:
+            long: sample
+            help: sample rate
+            takes_value: true
+            value_name: "1:N"
+        - interval:
+            long: interval
+            help: export interval (s)
+            takes_value: true
+            default_value: "15"
+        - kernel:
+            long: kernel
+            env: KERNEL
+            help: kernel version
+            takes_value: true
+            value_name: x.y.z
+        - agg:
+            index: 1
+            help: aggregator
+            required: true
+            value_name: "host:port"
   - probe:
       usage: kappa probe [options]
       help_message: print help

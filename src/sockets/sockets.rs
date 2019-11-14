@@ -1,18 +1,29 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use log::debug;
 use parking_lot::RwLock;
-use crate::capture::flow::{Flow, Direction, Key, Protocol};
-use super::{Event, Kind, Socket, Process};
+use crate::capture::flow::{Flow, Key, Protocol};
+use crate::collect::Record;
+use super::{Event, Kind, Process};
+use Protocol::TCP;
 
 pub struct Sockets {
-    socks: RwLock<HashMap<Key, Socket>>,
+    socks:   RwLock<HashMap<Key, Socket>>,
+    timeout: Duration,
+}
+
+#[derive(Debug)]
+pub struct Socket {
+    proc:   Arc<Process>,
+    closed: Option<Instant>,
 }
 
 impl Sockets {
     pub fn new() -> Self {
         Self {
-            socks: RwLock::new(HashMap::new()),
+            socks:   RwLock::new(HashMap::new()),
+            timeout: Duration::from_secs(60),
         }
     }
 
@@ -20,20 +31,16 @@ impl Sockets {
         self.socks.read().get(key).map(|e| e.proc.clone())
     }
 
-    pub fn merge(&self, flow: Vec<Flow>) -> Vec<(Flow, Option<Arc<Process>>)> {
+    pub fn merge(&self, flow: Vec<Flow>) -> Vec<Record> {
         let socks = self.socks.read();
         flow.into_iter().map(|flow| {
-            let src = flow.src;
-            let dst = flow.dst;
-
-            let key = match flow.direction {
-                Direction::In                       => Key(Protocol::TCP, dst, src),
-                Direction::Out | Direction::Unknown => Key(Protocol::TCP, src, dst),
-            };
-
-            let sock = socks.get(&key);
-
-            (flow, sock.map(|e| e.proc.clone()))
+            let src = socks.get(&Key(TCP, flow.src, flow.dst));
+            let dst = socks.get(&Key(TCP, flow.dst, flow.src));
+            Record {
+                flow: flow,
+                src:  src.map(|s| s.proc.clone()),
+                dst:  dst.map(|s| s.proc.clone()),
+            }
         }).collect()
     }
 
@@ -46,7 +53,7 @@ impl Sockets {
     }
 
     fn insert(&self, e: Event) {
-        let key  = Key(Protocol::TCP, e.src.into(), e.dst.into());
+        let key  = Key(TCP, e.src.into(), e.dst.into());
         let src  = e.src;
         let dst  = e.dst;
         let proc = e.proc;
@@ -54,19 +61,23 @@ impl Sockets {
             debug!("{} -> {}: {} ({})", src, dst, proc.comm, proc.pid);
             Socket {
                 proc:   Arc::new(proc),
-                closed: false,
+                closed: None,
             }
         });
     }
 
     fn finish(&self, e: Event) {
-        let key = Key(Protocol::TCP, e.src.into(), e.dst.into());
+        let key = Key(TCP, e.src.into(), e.dst.into());
         if let Some(sock) = self.socks.write().get_mut(&key) {
-            sock.closed = true;
+            sock.closed = Some(Instant::now());
         }
     }
 
     pub fn compact(&self) {
-        self.socks.write().retain(|_, s| !s.closed);
+        let now     = Instant::now();
+        let expired = |i: Instant| i.saturating_duration_since(now) >= self.timeout;
+        self.socks.write().retain(|_, s| {
+            !s.closed.map(expired).unwrap_or(false)
+        });
     }
 }

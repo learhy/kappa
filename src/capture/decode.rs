@@ -8,7 +8,7 @@ use super::flow::*;
 use crate::packet::Transport::*;
 
 pub fn decode(mac: Option<MacAddr>, cap: pcap::Packet<'_>) -> Option<Flow> {
-    let ts  = Timestamp(cap.header.ts);
+    let ts  = cap.header.ts.into();
     let eth = EthernetPacket::new(cap.data)?;
 
     let bytes = cap.header.len as usize - EthernetPacket::minimum_packet_size();

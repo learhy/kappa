@@ -7,9 +7,9 @@ use crossbeam_channel::Sender;
 use log::{debug, info, warn};
 use parking_lot::Mutex;
 use pcap::{Capture, Active};
-use super::{capture, Config, Sample};
+use super::{capture, Config, Sample, Timestamp};
 use super::queue::Queue;
-use super::flow::{Flow, Timestamp};
+use super::flow::Flow;
 use pnet::util::MacAddr;
 use pcap::Error::*;
 

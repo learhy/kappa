@@ -5,8 +5,8 @@ use log::warn;
 use pcap::Packet;
 use pnet::util::MacAddr;
 use time::Duration;
-use super::{decode, timer::Timer};
-use super::flow::{Flow, Key, Timestamp};
+use super::{decode, Timestamp, timer::Timer};
+use super::flow::{Flow, Key};
 use crossbeam_channel::TrySendError::*;
 
 pub struct Queue {

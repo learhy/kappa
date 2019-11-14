@@ -1,5 +1,5 @@
 use time::Duration;
-use super::flow::Timestamp;
+use super::Timestamp;
 
 pub struct Timer {
     delay: Duration,
