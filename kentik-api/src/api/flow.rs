@@ -1,4 +1,3 @@
-use futures_util::TryStreamExt;
 use crate::{Client, Device, Error};
 
 impl Client {
@@ -8,10 +7,8 @@ impl Client {
 
         let mut request = self.request(&url);
         request.header("Content-Type", "application/binary");
-
-        let request  = request.body(flow.into())?;
-        let response = self.send(request).await?;
-        response.into_body().try_concat().await?;
+        let request = request.body(flow.into())?;
+        self.send(request).await?;
 
         Ok(())
     }

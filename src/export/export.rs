@@ -1,16 +1,15 @@
 use std::sync::Arc;
 use anyhow::Result;
-use log::{debug, warn};
+use log::debug;
 use tokio::runtime::Runtime;
 use kentik_api::{Client, Device};
-use kentik_api::Error::*;
 use crate::capture::Flow;
 use crate::sockets::{Event, Sockets};
-use super::pack;
+use super::{get_or_create_device, pack, send};
 
 pub struct Export {
-    client: Client,
-    device: Device,
+    client: Arc<Client>,
+    device: Arc<Device>,
     rt:     Runtime,
     socks:  Arc<Sockets>,
 }
@@ -18,10 +17,11 @@ pub struct Export {
 impl Export {
     pub fn new(client: Client, device: &str, plan: Option<u64>, socks: Arc<Sockets>) -> Result<Self> {
         let mut rt = Runtime::new()?;
-        let device = rt.block_on(get_or_create_device(&client, &device, plan))?;
+        let client = Arc::new(client);
+        let device = rt.block_on(get_or_create_device(client.clone(), &device, plan))?;
         Ok(Self {
             client: client,
-            device: device,
+            device: Arc::new(device),
             rt:     rt,
             socks:  socks,
         })
@@ -31,7 +31,6 @@ impl Export {
         debug!("exporting {} flows", flows.len());
         let msg = pack(&self.device, &*self.socks, flows)?;
 
-        // FIXME: don't want these clones
         let client = self.client.clone();
         let device = self.device.clone();
         self.rt.spawn(send(client, device, msg));
@@ -44,35 +43,4 @@ impl Export {
     pub fn record(&mut self, e: Event) {
         self.socks.update(e);
     }
-}
-
-async fn send(client: Client, device: Device, msg: Vec<u8>) {
-    match client.flow(&device, msg).await {
-        Ok(()) => (),
-        Err(e) => warn!("failed to deliver flow: {:?}", e),
-    }
-}
-
-async fn get_or_create_device(client: &Client, name: &str, plan: Option<u64>) -> Result<Device> {
-    let device = match client.get_device_by_name(name).await {
-        Ok(device)       => device,
-        Err(App(_, 404)) => create_device(client, name, plan).await?,
-        Err(e)           => Err(e)?,
-    };
-    debug!("device {:?}", device);
-    Ok(device)
-}
-
-async fn create_device(client: &Client, name: &str, plan: Option<u64>) -> Result<Device> {
-    debug!("creating device {}", name);
-    Ok(client.create_device(Device {
-        name:        name.to_owned(),
-        kind:        "host-nprobe-dns-www".to_owned(),
-        subtype:     "kappa".to_owned(),
-        bgp_type:    "none".to_owned(),
-        cdn_attr:    "N".to_owned(),
-        sample_rate: 1,
-        plan_id:     plan,
-        ..Default::default()
-    }).await?)
 }

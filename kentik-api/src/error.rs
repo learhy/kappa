@@ -16,8 +16,8 @@ impl From<http::Error> for Error {
     }
 }
 
-impl From<hyper::Error> for Error {
-    fn from(err: hyper::Error) -> Self {
+impl From<isahc::Error> for Error {
+    fn from(err: isahc::Error) -> Self {
         Error::Other(err.to_string())
     }
 }

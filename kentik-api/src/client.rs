@@ -1,43 +1,29 @@
-use futures_util::TryStreamExt;
-use hyper::{Body, Client as HttpClient, Method, Request, Response, StatusCode};
-use hyper::client::HttpConnector;
-use hyper::http::request::Builder;
-use hyper_rustls::HttpsConnector;
+use isahc::prelude::*;
+use http::{Method, StatusCode, request::Builder};
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use rustls::ClientConfig;
-use webpki_roots::TLS_SERVER_ROOTS;
 use crate::Error;
 
-#[derive(Clone)]
 pub struct Client {
-    pub(crate) client: HttpClient<HttpsConnector<HttpConnector>, Body>,
+    pub(crate) client: HttpClient,
     pub(crate) email:  String,
     pub(crate) token:  String,
     pub(crate) urls:   Urls,
 }
 
 impl Client {
-    pub fn new(email: &str, token: &str, region: Option<&str>) -> Client {
-        let mut config = ClientConfig::new();
-        config.root_store.add_server_trust_anchors(&TLS_SERVER_ROOTS);
-
-        let mut c = HttpConnector::new();
-        c.enforce_http(false);
-        let c = HttpsConnector::from((c, config));
-
-        Client {
-            client: HttpClient::builder().build(c),
+    pub fn new(email: &str, token: &str, region: Option<&str>) -> Result<Self, Error> {
+        Ok(Self {
+            client: HttpClient::new()?,
             email:  email.to_owned(),
             token:  token.to_owned(),
             urls:   Urls::new(region),
-        }
+        })
     }
 
     pub async fn get<T: DeserializeOwned>(&self, url: &str) -> Result<T, Error> {
-        let request  = self.request(url).body(Body::empty())?;
-        let response = self.send(request).await?;
-        let body     = response.into_body().try_concat().await?;
-        Ok(serde_json::from_slice(&body)?)
+        let request = self.request(url).body(Body::empty())?;
+        let mut res = self.send(request).await?;
+        Ok(res.body_mut().json()?)
     }
 
     pub async fn post<T: Serialize, U: DeserializeOwned>(&self, url: &str, body: &T) -> Result<U, Error> {
@@ -47,15 +33,14 @@ impl Client {
         request.method(Method::POST);
         request.header("Content-Type", "application/json");
 
-        let request  = request.body(body.into())?;
-        let response = self.send(request).await?;
-        let body     = response.into_body().try_concat().await?;
+        let request = request.body(body.into())?;
+        let mut res = self.send(request).await?;
 
-        Ok(serde_json::from_slice(&body)?)
+        Ok(res.body_mut().json()?)
     }
 
     pub async fn send(&self, request: Request<Body>) -> Result<Response<Body>, Error> {
-        let response = self.client.request(request).await?;
+        let response = self.client.send_async(request).await?;
         let status   = response.status();
         match status {
             _ if status.is_success() => Ok(response),
@@ -65,7 +50,7 @@ impl Client {
     }
 
     pub(crate) fn request(&self, url: &str) -> Builder {
-        let mut builder = Builder::new();
+        let mut builder = Request::builder();
         builder.uri(url);
         builder.header("X-CH-Auth-Email",     &self.email);
         builder.header("X-CH-Auth-API-Token", &self.token);
@@ -73,16 +58,16 @@ impl Client {
     }
 }
 
-async fn error(response: Response<Body>) -> Result<Error, Error> {
+async fn error(mut response: Response<Body>) -> Result<Error, Error> {
     let status = response.status();
-    let body   = response.into_body().try_concat().await?;
+    let body   = response.body_mut();
 
     #[derive(Deserialize)]
     struct Wrapper {
         error: String,
     }
 
-    Ok(match serde_json::from_slice::<Wrapper>(&body) {
+    Ok(match body.json::<Wrapper>() {
         Ok(w)  => Error::App(w.error, status.into()),
         Err(_) => Error::Status(status.into()),
     })

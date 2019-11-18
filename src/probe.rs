@@ -48,7 +48,7 @@ pub fn probe(args: &ArgMatches) -> Result<()> {
     register(SIGTERM, shutdown.clone())?;
     register(SIGINT,  shutdown.clone())?;
 
-    let client = Client::new(&email, &token, region);
+    let client = Client::new(&email, &token, region)?;
 
     let procs      = Procs::watch(kernel, shutdown.clone())?;
     let mut links  = Links::watch(shutdown.clone())?;

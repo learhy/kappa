@@ -3,10 +3,10 @@ use tokio::runtime::Runtime;
 use kentik_api::*;
 
 fn main() -> Result<()> {
-    let rt = Runtime::new()?;
+    let mut rt = Runtime::new()?;
 
-    let client = Client::new("test@example.com", "token", Some("localhost:8999"));
-    // let client = Client::new("will@kentik.com", "5005335a7b859edb768b58925d1dfac1", Some("our1"));
+    let client = Client::new("test@example.com", "token", Some("localhost:8999"))?;
+    // let client = Client::new("will@kentik.com", "5005335a7b859edb768b58925d1dfac1", Some("our1"))?;
 
     let device: Result<Device> = rt.block_on(async {
         let r = client.get_device_by_name("dev1").await?;
