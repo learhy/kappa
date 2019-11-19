@@ -4,11 +4,10 @@ use capnp::{message::Builder, serialize_packed};
 use pnet::{packet::PrimitiveValues, util::MacAddr};
 use kentik_api::Device;
 use crate::chf_capnp::*;
-use crate::capture::{Direction, Flow, Protocol};
+use crate::capture::{Direction, Protocol};
 use crate::collect::Record;
-use crate::sockets::Sockets;
 
-pub fn pack(device: &Device, socks: &Sockets, flows: Vec<Flow>) -> Result<Vec<u8>> {
+pub fn pack(device: &Device, records: Vec<Record>) -> Result<Vec<u8>> {
     let column = |name: &str| {
         match device.customs.iter().find(|c| c.name == name) {
             Some(c) => Ok(c.id as u32),
@@ -28,9 +27,9 @@ pub fn pack(device: &Device, socks: &Sockets, flows: Vec<Flow>) -> Result<Vec<u8
 
     let mut msg  = Builder::new_default();
     let root = msg.init_root::<packed_c_h_f::Builder>();
-    let mut msgs = root.init_msgs(flows.len() as u32);
+    let mut msgs = root.init_msgs(records.len() as u32);
 
-    for (index, Record { flow, src, dst }) in socks.merge(flows).iter().enumerate() {
+    for (index, Record { flow, src, dst }) in records.iter().enumerate() {
         let mut msg = msgs.reborrow().get(index as u32);
 
         let src_eth_mac = pack_mac(&flow.ethernet.src);

@@ -1,9 +1,11 @@
 pub mod agent;
+pub mod agg;
 pub mod probe;
 
 pub mod args;
 pub mod capture;
 pub mod collect;
+pub mod combine;
 pub mod export;
 pub mod link;
 pub mod packet;

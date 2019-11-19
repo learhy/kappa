@@ -44,13 +44,26 @@ async fn dispatch(agg: String, mut rx: Receiver<Vec<Record>>) {
     loop {
         let sock = connect(&agg).await;
 
-        let length = LengthDelimitedCodec::new();
+        let mut length = LengthDelimitedCodec::new();
+        length.set_max_frame_length(32 * 1024 * 1024);
         let framed = FramedWrite::new(sock, length);
         let format = Json::default();
 
         let mut codec = tokio_serde::FramedWrite::new(framed, format);
 
         while let Some(recs) = rx.next().await {
+            for item in &recs {
+                if item.flow.protocol == crate::capture::flow::Protocol::TCP {
+                    log::debug!("flow ({:?}): {}:{} -> {}:{}: {} -> {}",
+                                item.flow.direction,
+                                item.flow.src.addr, item.flow.src.port,
+                                item.flow.dst.addr, item.flow.dst.port,
+                                item.src.as_ref().map(|p| p.comm.as_str()).unwrap_or("??"),
+                                item.dst.as_ref().map(|p| p.comm.as_str()).unwrap_or("??"),
+                    );
+                }
+            }
+
             if let Err(e) = codec.send(recs).await {
                 warn!("write error: {}", e);
                 break;

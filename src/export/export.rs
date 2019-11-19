@@ -29,7 +29,8 @@ impl Export {
 
     pub fn export(&mut self, flows: Vec<Flow>) -> Result<()> {
         debug!("exporting {} flows", flows.len());
-        let msg = pack(&self.device, &*self.socks, flows)?;
+        let rs  = self.socks.merge(flows);
+        let msg = pack(&self.device, rs)?;
 
         let client = self.client.clone();
         let device = self.device.clone();

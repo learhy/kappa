@@ -6,7 +6,7 @@ use env_logger::Builder;
 use jemallocator::Jemalloc;
 use log::info;
 use log::LevelFilter::*;
-use kappa::{agent, probe};
+use kappa::{agent, agg, probe};
 
 #[global_allocator]
 static ALLOC: Jemalloc = Jemalloc;
@@ -28,6 +28,7 @@ fn main() -> Result<()> {
 
     match args.subcommand() {
         ("agent", Some(args)) => agent::agent(&args),
+        ("agg",   Some(args)) => agg::agg(&args),
         ("probe", Some(args)) => probe::probe(&args),
         _                     => unreachable!(),
     }.unwrap_or_else(abort);
