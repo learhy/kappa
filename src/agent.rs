@@ -9,7 +9,7 @@ use nixv::Version;
 use regex::Regex;
 use signal_hook::{flag::register, SIGINT, SIGTERM};
 use tokio::runtime::Runtime;
-use crate::args::opt;
+use crate::args::{opt, read};
 use crate::capture::{self, Sample, Sources};
 use crate::collect::Collect;
 use crate::link::{self, Links};
@@ -21,6 +21,8 @@ pub fn agent(args: &ArgMatches) -> Result<()> {
     let kernel   = args.value_of("kernel").and_then(Version::parse);
     let interval = value_t!(args, "interval", u64)?;
     let sample   = opt(args.value_of("sample"))?.unwrap_or(Sample::None);
+
+    let code = opt(args.value_of("bytecode"))?.map(read).transpose()?;
 
     let capture  = values_t!(args, "capture", String)?.join("|");
     let exclude  = args.values_of("exclude").map(|vs| {
@@ -42,7 +44,7 @@ pub fn agent(args: &ArgMatches) -> Result<()> {
     register(SIGINT,  shutdown.clone())?;
 
     let rt          = Runtime::new()?;
-    let procs       = Procs::watch(kernel, shutdown.clone())?;
+    let procs       = Procs::watch(kernel, code, shutdown.clone())?;
     let mut links   = Links::watch(shutdown.clone())?;
     let mut collect = Collect::new(agg, procs.sockets(), &rt);
 

@@ -9,7 +9,7 @@ use nixv::Version;
 use regex::Regex;
 use signal_hook::{flag::register, SIGINT, SIGTERM};
 use kentik_api::Client;
-use crate::args::opt;
+use crate::args::{opt, read};
 use crate::capture::{self, Sample, Sources};
 use crate::export::Export;
 use crate::link::{self, Links};
@@ -25,6 +25,8 @@ pub fn probe(args: &ArgMatches) -> Result<()> {
     let region = args.value_of("region");
     let _proxy = args.value_of("proxy");
     let kernel = args.value_of("kernel").and_then(Version::parse);
+
+    let code = opt(args.value_of("bytecode"))?.map(read).transpose()?;
 
     let interval = value_t!(args, "interval", u64)?;
     let sample   = opt(args.value_of("sample"))?.unwrap_or(Sample::None);
@@ -50,14 +52,14 @@ pub fn probe(args: &ArgMatches) -> Result<()> {
 
     let client = Client::new(&email, &token, region)?;
 
-    let procs      = Procs::watch(kernel, shutdown.clone())?;
+    let procs      = Procs::watch(kernel, code, shutdown.clone())?;
     let mut links  = Links::watch(shutdown.clone())?;
     let mut export = Export::new(client, &device, plan, procs.sockets())?;
 
     let (tx, rx) = bounded(1_000);
     let mut sources = Sources::new(config, tx);
 
-    let timeout = Duration::from_millis(1);
+    let timeout = Duration::from_millis(5);
 
     while !shutdown.load(Ordering::Acquire) {
         if let Ok(flows) = rx.recv_timeout(timeout) {

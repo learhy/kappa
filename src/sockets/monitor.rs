@@ -9,7 +9,7 @@ pub struct Procs {
 }
 
 impl Procs {
-    pub fn watch(_kernel: Option<Version>, _shutdown: Arc<AtomicBool>) -> Result<Self> {
+    pub fn watch(_kernel: Option<Version>, _code: Option<Vec<u8>>, _shutdown: Arc<AtomicBool>) -> Result<Self> {
         Ok(Procs {
             socks: Arc::new(Sockets::new())
         })

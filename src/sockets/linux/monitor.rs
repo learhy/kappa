@@ -12,6 +12,8 @@ use crate::sockets::Sockets;
 use super::{Event, Kind};
 use super::cache::Cache;
 
+static BYTECODE: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/bpf_kern.o"));
+
 pub struct Procs {
     #[allow(unused)]
     probes: Probes,
@@ -19,8 +21,8 @@ pub struct Procs {
 }
 
 impl Procs {
-    pub fn watch(kernel: Option<Version>, shutdown: Arc<AtomicBool>) -> Result<Self> {
-        let code   = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/bpf_kern.o"));
+    pub fn watch(kernel: Option<Version>, code: Option<Vec<u8>>, shutdown: Arc<AtomicBool>) -> Result<Self> {
+        let code   = code.as_ref().map(Vec::as_slice).unwrap_or(&BYTECODE);
         let probes = Probes::load(&code[..], kernel)?;
         let fds    = probes.open()?;
         let socks  = Arc::new(Sockets::new());

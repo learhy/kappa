@@ -51,6 +51,11 @@ subcommands:
             help: export interval (s)
             takes_value: true
             default_value: "15"
+        - bytecode:
+            long: bytecode
+            help: eBPF bytecode
+            takes_value: true
+            value_name: FILE
         - kernel:
             long: kernel
             env: KERNEL
@@ -177,6 +182,11 @@ subcommands:
             help: export interval (s)
             takes_value: true
             default_value: "15"
+        - bytecode:
+            long: bytecode
+            help: eBPF bytecode
+            takes_value: true
+            value_name: FILE
         - kernel:
             long: kernel
             env: KERNEL
