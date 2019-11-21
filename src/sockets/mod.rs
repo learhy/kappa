@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use crate::capture::flow::Protocol;
 use serde::{Serialize, Deserialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
@@ -19,16 +20,19 @@ pub struct CGroup {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Event {
-    pub proc: Process,
-    pub kind: Kind,
-    pub src:  SocketAddr,
-    pub dst:  SocketAddr,
+    pub kind:  Kind,
+    pub proto: Protocol,
+    pub src:   SocketAddr,
+    pub dst:   SocketAddr,
+    pub proc:  Process,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Kind {
     Connect,
     Accept,
+    TX,
+    RX,
     Close,
 }
 

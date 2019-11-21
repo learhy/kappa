@@ -133,3 +133,25 @@ impl From<SocketAddr> for Addr {
         }
     }
 }
+
+impl From<u16> for Protocol {
+    fn from(n: u16) -> Self {
+        match n {
+            1  => Protocol::ICMP,
+            6  => Protocol::TCP,
+            17 => Protocol::UDP,
+            _  => Protocol::Other(n),
+        }
+    }
+}
+
+impl From<Protocol> for u16 {
+    fn from(p: Protocol) -> Self {
+        match p {
+            Protocol::ICMP     => 1,
+            Protocol::TCP      => 6,
+            Protocol::UDP      => 17,
+            Protocol::Other(n) => n,
+        }
+    }
+}

@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::env;
 use std::net::Ipv4Addr;
 use std::os::raw::c_int;
@@ -49,6 +50,7 @@ impl Procs {
 struct Data {
     event: u32,
     pid:   u32,
+    proto: u32,
     saddr: u32,
     sport: u32,
     daddr: u32,
@@ -81,21 +83,28 @@ fn monitor(fds: Vec<c_int>, socks: Arc<Sockets>, shutdown: Arc<AtomicBool>) -> R
 }
 
 fn resolve(data: &Data, cache: &mut Cache) -> Option<Event> {
-    let pid = data.pid as u32;
-    let src = (Ipv4Addr::from(data.saddr.to_be()), data.sport as u16).into();
-    let dst = (Ipv4Addr::from(data.daddr.to_be()), data.dport as u16).into();
+    let &Data { pid, saddr, daddr, .. } = data;
+
+    let proto = u16::try_from(data.proto).ok()?;
+    let sport = u16::try_from(data.sport).ok()?;
+    let dport = u16::try_from(data.dport).ok()?;
+    let src   = (Ipv4Addr::from(saddr.to_be()), sport).into();
+    let dst   = (Ipv4Addr::from(daddr.to_be()), dport).into();
 
     let kind = match data.event {
         1 => Kind::Connect,
         2 => Kind::Accept,
-        3 => Kind::Close,
+        3 => Kind::TX,
+        4 => Kind::RX,
+        5 => Kind::Close,
         _ => return None,
     };
 
     Some(Event {
-        proc: cache.get(pid)?.clone(),
-        kind: kind,
-        src:  src,
-        dst:  dst,
+        kind:  kind,
+        proto: proto.into(),
+        src:   src,
+        dst:   dst,
+        proc:  cache.get(pid)?.clone(),
     })
 }
