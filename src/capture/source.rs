@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fs::File;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
@@ -6,15 +7,15 @@ use anyhow::Result;
 use crossbeam_channel::Sender;
 use log::{debug, info, warn};
 use parking_lot::Mutex;
-use pcap::{Capture, Active};
+use crate::link::Add;
+use crate::os::setns;
 use super::{capture, Config, Sample, Timestamp};
 use super::queue::Queue;
 use super::flow::Flow;
-use pnet::util::MacAddr;
 use pcap::Error::*;
 
 pub struct Sources {
-    pub cfg: Config,
+    pub cfg: Arc<Config>,
     pub tx:  Sender<Vec<Flow>>,
     pub map: Arc<Mutex<HashMap<String, Source>>>,
 }
@@ -26,44 +27,49 @@ pub struct Source {
 
 impl Sources {
     pub fn new(cfg: Config, tx: Sender<Vec<Flow>>) -> Self {
-        let map = Arc::new(Mutex::new(HashMap::new()));
-        Self { cfg, tx, map }
+        let map = Mutex::new(HashMap::new());
+        Self {
+            cfg: Arc::new(cfg),
+            tx:  tx,
+            map: Arc::new(map),
+        }
     }
 
-    pub fn add(&mut self, link: String, mac: Option<MacAddr>) -> Result<()> {
-        if !self.check(&link) {
+    pub fn add(&mut self, Add { name, dev, mac, netns }: Add) -> Result<()> {
+        let name = match &netns {
+            Some(_) => format!("{}-{}", name, dev),
+            None    => name,
+        };
+
+        if !self.check(&name) {
             return Ok(());
         }
-
-        let cap = match capture(&link, &self.cfg)? {
-            Some(cap) => cap,
-            None      => return Ok(()),
-        };
 
         let interval = time::Duration::from_std(self.cfg.interval)?;
         let sample   = match self.cfg.sample {
             Sample::Rate(n) => n,
             Sample::None    => 1,
         };
-        let sender   = self.tx.clone();
 
-        let queue    = Queue::new(mac, sample, sender, interval);
-        let mut task = Task::new(cap, queue);
+        let sender = self.tx.clone();
+        let queue  = Queue::new(mac, sample, sender, interval);
+        let stop   = Arc::new(AtomicBool::new(false));
 
-        let source = Source { stop: task.stop.clone() };
+        let source = Source { stop: stop.clone() };
+        let cfg    = self.cfg.clone();
         let map    = self.map.clone();
-        self.map.lock().insert(link.clone(), source);
+        self.map.lock().insert(name.clone(), source);
 
-        info!("starting {} capture", link);
+        let mut task = Task::new(cfg, queue, stop);
 
         thread::spawn(move || {
-            match task.poll() {
-                Ok(()) => debug!("capture {} finished", link),
-                Err(e) => warn!("capture {} stopped: {:?}", link, e),
+            info!("starting {} capture", name);
+            match task.poll(&name, dev, netns) {
+                Ok(()) => debug!("capture {} finished", name),
+                Err(e) => warn!("capture {} stopped: {:?}", name, e),
             };
-            map.lock().remove(&link);
+            map.lock().remove(&name);
         });
-
 
         Ok(())
     }
@@ -95,20 +101,25 @@ impl Sources {
 }
 
 struct Task {
-    cap:   Capture<Active>,
+    cfg:   Arc<Config>,
     queue: Queue,
     stop:  Arc<AtomicBool>,
 }
 
 impl Task {
-    fn new(cap: Capture<Active>, queue: Queue) -> Self {
-        let stop = Arc::new(AtomicBool::new(false));
-        Self { cap, queue, stop }
+    fn new(cfg: Arc<Config>,queue: Queue, stop: Arc<AtomicBool>) -> Self {
+        Self { cfg, queue, stop }
     }
 
-    fn poll(&mut self) -> Result<()> {
+    fn poll(&mut self, name: &str, dev: String, netns: Option<File>) -> Result<()> {
+        if let Some(ns) = netns {
+            setns(&ns)?;
+        }
+
+        let mut cap = capture(name, &dev, &self.cfg)?;
+
         while !self.stop.load(Ordering::Acquire) && !self.queue.done() {
-            match self.cap.next() {
+            match cap.next() {
                 Ok(packet)          => self.queue.record(packet)?,
                 Err(TimeoutExpired) => self.queue.export(Timestamp::now()),
                 Err(NoMorePackets)  => break,

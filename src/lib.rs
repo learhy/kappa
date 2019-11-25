@@ -8,6 +8,7 @@ pub mod collect;
 pub mod combine;
 pub mod export;
 pub mod link;
+pub mod os;
 pub mod packet;
 pub mod sockets;
 

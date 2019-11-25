@@ -8,7 +8,8 @@ use crossbeam_channel::{Sender, Receiver, TryRecvError, unbounded};
 use log::{debug, error};
 use pcap::Device;
 use pnet::datalink;
-use super::Event;
+use pnet::util::MacAddr;
+use super::{Add, Event};
 use TryRecvError::*;
 
 pub struct Links {
@@ -50,16 +51,25 @@ fn monitor(tx: Sender<Event>, shutdown: Arc<AtomicBool>) -> Result<()> {
 
         for link in curr.difference(&copy) {
             let mac = macs.get(link).and_then(Option::clone);
-            tx.send(Event::Add(link.to_string(), mac))?;
+            tx.send(add(link, mac))?;
             links.insert(link.to_string());
         }
 
         for link in copy.difference(&curr) {
-            tx.send(Event::Del(link.to_string()))?;
+            tx.send(Event::Delete(link.to_string()))?;
             links.remove(link);
         }
 
         thread::sleep(Duration::from_secs(60));
     }
     Ok(())
+}
+
+fn add(link: &str, mac: Option<MacAddr>) -> Event {
+    Event::Add(Add {
+        name:  link.to_string(),
+        dev:   link.to_string(),
+        mac:   mac,
+        netns: None,
+    })
 }

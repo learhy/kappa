@@ -12,7 +12,7 @@ use tokio::runtime::Runtime;
 use crate::args::{opt, read};
 use crate::capture::{self, Sample, Sources};
 use crate::collect::Collect;
-use crate::link::{self, Links};
+use crate::link::{Event, Links};
 use crate::probes;
 use crate::sockets::Procs;
 
@@ -60,8 +60,9 @@ pub fn agent(args: &ArgMatches) -> Result<()> {
 
         while let Ok(Some(event)) = links.recv() {
             match event {
-                link::Event::Add(link, mac) => sources.add(link, mac)?,
-                link::Event::Del(link)      => sources.del(link),
+                Event::Add(add)       => sources.add(add)?,
+                Event::Delete(link)   => sources.del(link),
+                Event::Error(link, e) => warn!("link {} error: {}", link, e),
             }
         }
     }

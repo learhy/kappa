@@ -4,12 +4,13 @@ use std::thread;
 use anyhow::Result;
 use crossbeam_channel::{Sender, Receiver, TryRecvError, unbounded};
 use log::{debug, error};
-use nell::{Family, Message, Netlink};
-use nell::api::{Any, IFLA};
+use nell::{Family, Netlink};
+use nell::api::Any;
 use nell::ffi::*;
 use nell::sync::Socket;
-use pnet::util::MacAddr;
-use super::Event;
+use crate::link::{Add, Event};
+use super::Link;
+use super::{link, links, peer};
 use TryRecvError::*;
 
 const IFF_UP:      u32 = nell::ffi::IFF_UP      as u32;
@@ -38,25 +39,12 @@ impl Links {
     }
 }
 
-#[derive(Debug, Default)]
-struct Link {
-    name:  String,
-    addr:  Option<MacAddr>,
-    flags: u32,
-}
-
 fn monitor(tx: Sender<Event>, shutdown: Arc<AtomicBool>) -> Result<()> {
     let mut sock = Socket::new(Family::Route)?;
 
-    let mut msg = Message::<rtgenmsg>::new(RTM_GETLINK);
-    msg.set_flags(NLM_F_REQUEST | NLM_F_DUMP);
-    msg.rtgen_family = AF_UNSPEC;
-    sock.send(&msg)?;
-
-    while let Netlink::Msg(msg) = sock.recv::<ifinfomsg>()? {
-        let link = link(msg)?;
+    for link in links(&mut sock)? {
         if link.flags & IFF_UP > 0 {
-            tx.send(Event::Add(link.name, link.addr))?;
+            tx.send(add(link))?;
         }
     }
 
@@ -73,8 +61,8 @@ fn monitor(tx: Sender<Event>, shutdown: Arc<AtomicBool>) -> Result<()> {
                 let link = link(msg)?;
                 let up = link.flags & IFF_UP > 0 && msg.ifi_change & IFF_PROMISC == 0;
                 match msg.nlmsg_type() {
-                    RTM_NEWLINK if up => tx.send(Event::Add(link.name, link.addr))?,
-                    RTM_DELLINK       => tx.send(Event::Del(link.name))?,
+                    RTM_NEWLINK if up => tx.send(add(link))?,
+                    RTM_DELLINK       => tx.send(del(link))?,
                     _                 => ()
                 }
             }
@@ -84,26 +72,17 @@ fn monitor(tx: Sender<Event>, shutdown: Arc<AtomicBool>) -> Result<()> {
     Ok(())
 }
 
-fn link(msg: &Message<ifinfomsg>) -> Result<Link> {
-    let mut link = Link {
-        flags: msg.ifi_flags,
-        ..Link::default()
+fn add(link: Link) -> Event {
+    let name = link.name.clone();
+    let peer = link.peer.map(peer);
+    let (dev, mac, netns) = match peer.transpose() {
+        Ok(Some((netns, link))) => (link.name, link.addr, Some(netns)),
+        Ok(None)                => (link.name, link.addr, None),
+        Err(e)                  => return Event::Error(name, e.into()),
     };
-
-    for attr in msg.attrs() {
-        match attr? {
-            IFLA::IFName(name)    => link.name = name.to_string(),
-            IFLA::Address(octets) => link.addr = mac(octets),
-            _                     => (),
-        }
-    }
-
-    Ok(link)
+    Event::Add(Add { name, dev, mac, netns })
 }
 
-fn mac(octets: &[u8]) -> Option<MacAddr> {
-    match octets {
-        &[a, b, c, d, e, f] => Some(MacAddr::new(a, b, c, d, e, f)),
-        _                   => None,
-    }
+fn del(Link { name, .. }: Link) -> Event {
+    Event::Delete(name)
 }

@@ -1,9 +1,30 @@
 use std::str::FromStr;
+use anyhow::Result;
+use pcap::{Capture, Active};
 
 #[derive(Debug)]
 pub enum Sample {
     Rate(u32),
     None,
+}
+
+#[cfg(target_os = "linux")]
+pub fn sample(cap: &Capture<Active>, rate: u32) -> Result<()> {
+    use std::os::unix::io::AsRawFd;
+    use bpf::{Op, Prog};
+
+    Ok(bpf::attach_filter(cap.as_raw_fd(), Prog::new(vec![
+        Op::new(0x20, 0, 0, 0xfffff038),
+        Op::new(0x94, 0, 0, rate),
+        Op::new(0x15, 0, 1, 0x00000001),
+        Op::new(0x06, 0, 0, 0xffffffff),
+        Op::new(0x06, 0, 0, 0000000000),
+    ]))?)
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn sample(_cap: &Capture<Active>, _rate: u32) -> Result<()> {
+    Err(anyhow::anyhow!("unsupported"))
 }
 
 impl FromStr for Sample {

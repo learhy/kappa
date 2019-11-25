@@ -54,7 +54,7 @@ async fn dispatch(agg: String, mut rx: Receiver<Vec<Record>>) {
         while let Some(recs) = rx.next().await {
             for item in &recs {
                 if item.flow.protocol == crate::capture::flow::Protocol::TCP {
-                    log::debug!("flow ({:?}): {}:{} -> {}:{}: {} -> {}",
+                    log::trace!("flow ({:?}): {}:{} -> {}:{}: {} -> {}",
                                 item.flow.direction,
                                 item.flow.src.addr, item.flow.src.port,
                                 item.flow.dst.addr, item.flow.dst.port,
