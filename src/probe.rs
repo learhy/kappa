@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use anyhow::Result;
-use clap::{ArgMatches, value_t, values_t};
+use clap::{ArgMatches, value_t};
 use crossbeam_channel::bounded;
 use log::warn;
 use nixv::Version;
@@ -31,10 +31,8 @@ pub fn probe(args: &ArgMatches) -> Result<()> {
     let interval = value_t!(args, "interval", u64)?;
     let sample   = opt(args.value_of("sample"))?.unwrap_or(Sample::None);
 
-    let capture  = values_t!(args, "capture", String)?.join("|");
-    let exclude  = args.values_of("exclude").map(|vs| {
-        vs.map(String::from).collect::<Vec<_>>().join("|")
-    }).unwrap_or_else(|| "^$".to_string());
+    let capture  = value_t!(args, "capture", String)?;
+    let exclude  = args.value_of("exclude").unwrap_or("^$");
 
     let config  = capture::Config {
         capture:     Regex::new(&capture)?,

@@ -30,17 +30,13 @@ subcommands:
             long: capture
             help: capture interfaces
             takes_value: true
-            multiple: true
-            number_of_values: 1
-            value_name: PATTERN
+            value_name: regex
             required: true
         - exclude:
             long: exclude
             help: exclude interfaces
             takes_value: true
-            multiple: true
-            number_of_values: 1
-            value_name: PATTERN
+            value_name: regex
         - sample:
             long: sample
             help: sample rate
@@ -55,7 +51,7 @@ subcommands:
             long: bytecode
             help: eBPF bytecode
             takes_value: true
-            value_name: FILE
+            value_name: file
         - kernel:
             long: kernel
             env: KERNEL
@@ -161,17 +157,13 @@ subcommands:
             long: capture
             help: capture interfaces
             takes_value: true
-            multiple: true
-            number_of_values: 1
-            value_name: PATTERN
+            value_name: regex
             required: true
         - exclude:
             long: exclude
             help: exclude interfaces
             takes_value: true
-            multiple: true
-            number_of_values: 1
-            value_name: PATTERN
+            value_name: regex
         - sample:
             long: sample
             help: sample rate
@@ -186,7 +178,7 @@ subcommands:
             long: bytecode
             help: eBPF bytecode
             takes_value: true
-            value_name: FILE
+            value_name: file
         - kernel:
             long: kernel
             env: KERNEL
