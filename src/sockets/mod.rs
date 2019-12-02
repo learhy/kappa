@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::time::Duration;
 use crate::capture::flow::Protocol;
 use serde::{Serialize, Deserialize};
 
@@ -24,6 +25,7 @@ pub struct Event {
     pub proto: Protocol,
     pub src:   SocketAddr,
     pub dst:   SocketAddr,
+    pub srtt:  Duration,
     pub proc:  Process,
 }
 

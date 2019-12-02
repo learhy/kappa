@@ -15,6 +15,7 @@ pub struct Sockets {
 #[derive(Debug)]
 pub struct Socket {
     proc: Arc<Process>,
+    srtt: Duration,
     seen: Instant,
 }
 
@@ -36,10 +37,12 @@ impl Sockets {
     pub fn merge(&self, flow: Vec<Flow>) -> Vec<Record> {
         let mut socks = self.socks.lock();
 
-        let now = Instant::now();
+        let now  = Instant::now();
+        let srtt = Mutex::new(Duration::from_micros(0));
         let mut lookup = |key: &Key| {
             socks.get_mut(key).map(|s| {
                 s.seen = now;
+                *srtt.lock() = s.srtt;
                 s.proc.clone()
             })
         };
@@ -51,6 +54,7 @@ impl Sockets {
                 flow: flow,
                 src:  src,
                 dst:  dst,
+                srtt: *srtt.lock(),
             }
         }).collect()
     }
@@ -65,15 +69,21 @@ impl Sockets {
         }
     }
 
-    fn insert(&self, Event { kind, proto, src, dst, proc, .. }: Event) {
+    fn insert(&self, Event { kind, proto, src, dst, proc, srtt, .. }: Event) {
         let key = Key(proto, src.into(), dst.into());
-        self.socks.lock().entry(key).or_insert_with(|| {
+
+        let new = || {
             trace!("{:?} {} -> {}: {} ({})", kind, src, dst, proc.comm, proc.pid);
             Socket {
                 proc: Arc::new(proc),
                 seen: Instant::now(),
+                srtt: srtt,
             }
-        });
+        };
+
+        self.socks.lock().entry(key).and_modify(|sock| {
+            sock.srtt = srtt;
+        }).or_insert_with(new);
     }
 
     pub fn compact(&self) {

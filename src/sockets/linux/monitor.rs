@@ -5,6 +5,7 @@ use std::os::raw::c_int;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
+use std::time::Duration;
 use anyhow::Result;
 use log::{debug, error, warn};
 use nixv::Version;
@@ -55,6 +56,7 @@ struct Data {
     sport: u32,
     daddr: u32,
     dport: u32,
+    srtt:  u32,
 }
 
 fn monitor(fds: Vec<c_int>, socks: Arc<Sockets>, shutdown: Arc<AtomicBool>) -> Result<()> {
@@ -83,7 +85,7 @@ fn monitor(fds: Vec<c_int>, socks: Arc<Sockets>, shutdown: Arc<AtomicBool>) -> R
 }
 
 fn resolve(data: &Data, cache: &mut Cache) -> Option<Event> {
-    let &Data { pid, saddr, daddr, .. } = data;
+    let &Data { pid, saddr, daddr, srtt, .. } = data;
 
     let proto = u16::try_from(data.proto).ok()?;
     let sport = u16::try_from(data.sport).ok()?;
@@ -105,6 +107,7 @@ fn resolve(data: &Data, cache: &mut Cache) -> Option<Event> {
         proto: proto.into(),
         src:   src,
         dst:   dst,
+        srtt:  Duration::from_micros(srtt as u64),
         proc:  cache.get(pid)?.clone(),
     })
 }
