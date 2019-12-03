@@ -1,8 +1,9 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use anyhow::Result;
 use futures::channel::mpsc::{Receiver, Sender, channel};
-use log::warn;
+use log::{debug, warn};
 use tokio::prelude::*;
 use tokio::net::TcpStream;
 use tokio::runtime::Runtime;
@@ -19,9 +20,9 @@ pub struct Collect {
 }
 
 impl Collect {
-    pub fn new(agg: String, socks: Arc<Sockets>, rt: &Runtime) -> Self {
+    pub fn new(agg: String, socks: Arc<Sockets>, rt: &Runtime, dump: Arc<AtomicBool>) -> Self {
         let (tx, rx) = channel(1024);
-        rt.spawn(dispatch(agg, rx));
+        rt.spawn(dispatch(agg, rx, dump));
         Self {
             tx:    tx,
             socks: socks,
@@ -40,7 +41,7 @@ impl Collect {
     }
 }
 
-async fn dispatch(agg: String, mut rx: Receiver<Vec<Record>>) {
+async fn dispatch(agg: String, mut rx: Receiver<Vec<Record>>, dump: Arc<AtomicBool>) {
     loop {
         let sock = connect(&agg).await;
 
@@ -52,16 +53,9 @@ async fn dispatch(agg: String, mut rx: Receiver<Vec<Record>>) {
         let mut codec = tokio_serde::FramedWrite::new(framed, format);
 
         while let Some(recs) = rx.next().await {
-            for item in &recs {
-                if item.flow.protocol == crate::capture::flow::Protocol::TCP {
-                    log::trace!("flow ({:?}): {}:{} -> {}:{}: {} -> {}",
-                                item.flow.direction,
-                                item.flow.src.addr, item.flow.src.port,
-                                item.flow.dst.addr, item.flow.dst.port,
-                                item.src.as_ref().map(|p| p.comm.as_str()).unwrap_or("??"),
-                                item.dst.as_ref().map(|p| p.comm.as_str()).unwrap_or("??"),
-                    );
-                }
+            if dump.swap(false, Ordering::SeqCst) {
+                debug!("collect state:");
+                recs.iter().for_each(print)
             }
 
             if let Err(e) = codec.send(recs).await {
@@ -83,4 +77,14 @@ async fn connect(agg: &str) -> TcpStream {
 
         delay_for(Duration::from_secs(1)).await;
     }
+}
+
+fn print(rec: &Record) {
+    let src = rec.src.as_ref().map(|p| p.comm.as_str()).unwrap_or("??");
+    let dst = rec.dst.as_ref().map(|p| p.comm.as_str()).unwrap_or("??");
+    debug!("{}:{} -> {}:{}: {} -> {}",
+           rec.flow.src.addr, rec.flow.src.port,
+           rec.flow.dst.addr, rec.flow.dst.port,
+           src,               dst,
+    );
 }

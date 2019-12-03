@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::mem;
 use anyhow::Result;
 use log::debug;
 use parking_lot::Mutex;
 use kentik_api::{Client, Device};
-use crate::capture::flow::{Key, Protocol};
+use crate::capture::flow::Key;
 use crate::collect::Record;
 use crate::export::{pack, send};
 
@@ -14,6 +15,7 @@ pub struct Combine {
     empty:  Mutex<HashMap<Key, Record>>,
     client: Arc<Client>,
     device: Arc<Device>,
+    dump:   AtomicBool,
 }
 
 impl Combine {
@@ -23,6 +25,7 @@ impl Combine {
             empty:  Mutex::new(HashMap::new()),
             client: client,
             device: Arc::new(device),
+            dump:   AtomicBool::new(false),
         }
     }
 
@@ -45,6 +48,11 @@ impl Combine {
         mem::swap(&mut *queue, &mut *export);
         drop(queue);
 
+        if self.dump.swap(false, Ordering::SeqCst) {
+            debug!("combine state:");
+            export.iter().for_each(print)
+        }
+
         let rs  = export.drain().map(|(_, r)| r).collect();
         let msg = pack(&self.device, rs)?;
 
@@ -56,15 +64,16 @@ impl Combine {
     }
 
     pub fn dump(&self) {
-        let queue = self.queue.lock();
-        for (key, rec) in queue.iter().filter(|(k, _)| k.0 == Protocol::TCP) {
-            let src = rec.src.as_ref().map(|p| p.comm.as_str()).unwrap_or("??");
-            let dst = rec.dst.as_ref().map(|p| p.comm.as_str()).unwrap_or("??");
-            debug!("{}:{} -> {}:{}: {} -> {}",
-                   key.1.addr, key.1.port,
-                   key.2.addr, key.2.port,
-                   src,        dst,
-            );
-        }
+        self.dump.store(true, Ordering::SeqCst);
     }
+}
+
+fn print<'a>((key, rec): (&'a Key, &'a Record)) {
+    let src = rec.src.as_ref().map(|p| p.comm.as_str()).unwrap_or("??");
+    let dst = rec.dst.as_ref().map(|p| p.comm.as_str()).unwrap_or("??");
+    debug!("{}:{} -> {}:{}: {} -> {}",
+           key.1.addr, key.1.port,
+           key.2.addr, key.2.port,
+           src,        dst,
+    );
 }

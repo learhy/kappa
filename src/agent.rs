@@ -7,7 +7,7 @@ use crossbeam_channel::bounded;
 use log::warn;
 use nixv::Version;
 use regex::Regex;
-use signal_hook::{flag::register, SIGINT, SIGTERM};
+use signal_hook::{flag::register, SIGINT, SIGTERM, SIGUSR1};
 use tokio::runtime::Runtime;
 use crate::args::{opt, read};
 use crate::capture::{self, Sample, Sources};
@@ -38,13 +38,15 @@ pub fn agent(args: &ArgMatches) -> Result<()> {
     };
 
     let shutdown = Arc::new(AtomicBool::new(false));
+    let dump     = Arc::new(AtomicBool::new(false));
     register(SIGTERM, shutdown.clone())?;
     register(SIGINT,  shutdown.clone())?;
+    register(SIGUSR1, dump.clone())?;
 
     let rt          = Runtime::new()?;
     let procs       = Procs::watch(kernel, code, shutdown.clone())?;
     let mut links   = Links::watch(shutdown.clone())?;
-    let mut collect = Collect::new(agg, procs.sockets(), &rt);
+    let mut collect = Collect::new(agg, procs.sockets(), &rt, dump);
 
     let (tx, rx) = bounded(1_000);
     let mut sources = Sources::new(config, tx);
