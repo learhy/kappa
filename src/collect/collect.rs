@@ -3,12 +3,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use anyhow::Result;
 use futures::channel::mpsc::{Receiver, Sender, channel};
+use futures_util::sink::SinkExt;
+use futures_util::stream::StreamExt;
 use log::{debug, warn};
-use tokio::prelude::*;
 use tokio::net::TcpStream;
 use tokio::runtime::Runtime;
 use tokio::time::delay_for;
-use tokio_serde::{self, formats::Json};
+use tokio_serde::{SymmetricallyFramed, formats::SymmetricalJson};
 use tokio_util::codec::{FramedWrite, LengthDelimitedCodec};
 use crate::capture::Flow;
 use crate::sockets::Sockets;
@@ -48,9 +49,9 @@ async fn dispatch(agg: String, mut rx: Receiver<Vec<Record>>, dump: Arc<AtomicBo
         let mut length = LengthDelimitedCodec::new();
         length.set_max_frame_length(32 * 1024 * 1024);
         let framed = FramedWrite::new(sock, length);
-        let format = Json::default();
+        let format = SymmetricalJson::default();
 
-        let mut codec = tokio_serde::FramedWrite::new(framed, format);
+        let mut codec = SymmetricallyFramed::new(framed, format);
 
         while let Some(recs) = rx.next().await {
             if dump.swap(false, Ordering::SeqCst) {

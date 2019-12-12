@@ -7,8 +7,8 @@ use log::{debug, error, warn};
 use signal_hook::{iterator::Signals, SIGINT, SIGTERM, SIGUSR1};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::runtime::Runtime;
-use tokio::time::Interval;
-use tokio_serde::{self, formats::Json};
+use tokio::time;
+use tokio_serde::{SymmetricallyFramed, formats::SymmetricalJson};
 use tokio_util::codec::{FramedRead, LengthDelimitedCodec};
 use kentik_api::Client;
 use crate::args::opt;
@@ -79,9 +79,9 @@ async fn agent(sock: TcpStream, combine: Arc<Combine>) -> Result<()> {
     let mut length = LengthDelimitedCodec::new();
     length.set_max_frame_length(32 * 1024 * 1024);
     let framed = FramedRead::new(sock, length);
-    let format = Json::<Vec<Record>>::default();
+    let format = SymmetricalJson::<Vec<Record>>::default();
 
-    let mut codec = tokio_serde::FramedRead::new(framed, format);
+    let mut codec = SymmetricallyFramed::new(framed, format);
 
     while let Some(rs) = codec.try_next().await? {
         combine.combine(rs);
@@ -91,7 +91,7 @@ async fn agent(sock: TcpStream, combine: Arc<Combine>) -> Result<()> {
 }
 
 async fn export(interval: Duration, combine: Arc<Combine>) {
-    let mut timer = Interval::new_interval(interval);
+    let mut timer = time::interval(interval);
     while let Some(_) = timer.next().await {
         if let Err(e) = combine.export() {
             warn!("export failed: {}", e);
