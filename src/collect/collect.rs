@@ -54,7 +54,7 @@ async fn dispatch(agg: String, mut rx: Receiver<Vec<Record>>, dump: Arc<AtomicBo
         let mut codec = SymmetricallyFramed::new(framed, format);
 
         while let Some(recs) = rx.next().await {
-            if dump.swap(false, Ordering::SeqCst) {
+            if dump.load(Ordering::SeqCst) {
                 debug!("collect state:");
                 recs.iter().for_each(print)
             }

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
 use std::time::Duration;
 use anyhow::Result;
 use clap::{ArgMatches, value_t};
@@ -7,7 +8,7 @@ use crossbeam_channel::bounded;
 use log::warn;
 use nixv::Version;
 use regex::Regex;
-use signal_hook::{flag::register, SIGINT, SIGTERM, SIGUSR1};
+use signal_hook::{iterator::Signals, SIGINT, SIGTERM, SIGUSR1};
 use tokio::runtime::Runtime;
 use crate::args::{opt, read};
 use crate::capture::{self, Sample, Sources};
@@ -37,11 +38,12 @@ pub fn agent(args: &ArgMatches) -> Result<()> {
         promisc:     true,
     };
 
-    let shutdown = Arc::new(AtomicBool::new(false));
-    let dump     = Arc::new(AtomicBool::new(false));
-    register(SIGTERM, shutdown.clone())?;
-    register(SIGINT,  shutdown.clone())?;
-    register(SIGUSR1, dump.clone())?;
+    let shutdown  = Arc::new(AtomicBool::new(false));
+    let dump      = Arc::new(AtomicBool::new(false));
+    let shutdown2 = shutdown.clone();
+    let dump2     = dump.clone();
+
+    thread::spawn(|| signals(shutdown2, dump2));
 
     let rt          = Runtime::new()?;
     let procs       = Procs::watch(kernel, code, shutdown.clone())?;
@@ -74,4 +76,22 @@ pub fn agent(args: &ArgMatches) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn signals(shutdown: Arc<AtomicBool>, dump: Arc<AtomicBool>) {
+    let toggle = || {
+        let state = dump.load(Ordering::SeqCst);
+        dump.store(!state, Ordering::SeqCst);
+    };
+
+    let signals = Signals::new(&[SIGINT, SIGTERM, SIGUSR1]).unwrap();
+    for signal in signals.forever() {
+        match signal {
+            SIGINT | SIGTERM => break,
+            SIGUSR1          => toggle(),
+            _                => unreachable!(),
+        }
+    }
+
+    shutdown.store(true, Ordering::SeqCst);
 }

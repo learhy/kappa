@@ -48,7 +48,7 @@ impl Combine {
         mem::swap(&mut *queue, &mut *export);
         drop(queue);
 
-        if self.dump.swap(false, Ordering::SeqCst) {
+        if self.dump.load(Ordering::SeqCst) {
             debug!("combine state:");
             export.iter().for_each(print)
         }
@@ -64,7 +64,8 @@ impl Combine {
     }
 
     pub fn dump(&self) {
-        self.dump.store(true, Ordering::SeqCst);
+        let state = self.dump.load(Ordering::SeqCst);
+        self.dump.store(!state, Ordering::SeqCst);
     }
 }
 
