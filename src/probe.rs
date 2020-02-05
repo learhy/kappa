@@ -17,6 +17,7 @@ use crate::probes;
 use crate::sockets::Procs;
 
 pub fn probe(args: &ArgMatches) -> Result<()> {
+    let node   = opt(args.value_of("node"))?.map(Arc::new);
     let email  = value_t!(args, "email",  String)?;
     let token  = value_t!(args, "token",  String)?;
     let device = value_t!(args, "device", String)?;
@@ -61,7 +62,7 @@ pub fn probe(args: &ArgMatches) -> Result<()> {
 
     while !shutdown.load(Ordering::Acquire) {
         if let Ok(flows) = rx.recv_timeout(timeout) {
-            export.export(flows)?;
+            export.export(flows, node.clone())?;
         }
 
         while let Ok(Some(event)) = links.recv() {

@@ -25,6 +25,11 @@ subcommands:
       usage: kappa agent [options] <host:port>
       help_message: print help
       args:
+        - node:
+            long: node
+            help: node identifier
+            takes_value: true
+            value_name: node
         - capture:
             short: c
             long: capture
@@ -114,6 +119,11 @@ subcommands:
       usage: kappa probe [options]
       help_message: print help
       args:
+        - node:
+            long: node
+            help: node identifier
+            takes_value: true
+            value_name: node
         - email:
             short: e
             long: email

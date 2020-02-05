@@ -27,9 +27,9 @@ impl Export {
         })
     }
 
-    pub fn export(&mut self, flows: Vec<Flow>) -> Result<()> {
+    pub fn export(&mut self, flows: Vec<Flow>, node: Option<Arc<String>>) -> Result<()> {
         debug!("exporting {} flows", flows.len());
-        let rs  = self.socks.merge(flows);
+        let rs  = self.socks.merge(flows, node);
         let msg = pack(&self.device, rs)?;
 
         let client = self.client.clone();

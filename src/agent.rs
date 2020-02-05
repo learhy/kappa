@@ -19,6 +19,7 @@ use crate::sockets::Procs;
 
 pub fn agent(args: &ArgMatches) -> Result<()> {
     let agg      = value_t!(args, "agg", String)?;
+    let node     = opt(args.value_of("node"))?;
     let kernel   = args.value_of("kernel").and_then(Version::parse);
     let interval = value_t!(args, "interval", u64)?;
     let sample   = opt(args.value_of("sample"))?.unwrap_or(Sample::None);
@@ -38,17 +39,16 @@ pub fn agent(args: &ArgMatches) -> Result<()> {
         promisc:     true,
     };
 
-    let shutdown  = Arc::new(AtomicBool::new(false));
-    let dump      = Arc::new(AtomicBool::new(false));
-    let shutdown2 = shutdown.clone();
-    let dump2     = dump.clone();
-
-    thread::spawn(|| signals(shutdown2, dump2));
+    let shutdown = Arc::new(AtomicBool::new(false));
 
     let rt          = Runtime::new()?;
     let procs       = Procs::watch(kernel, code, shutdown.clone())?;
     let mut links   = Links::watch(shutdown.clone())?;
-    let mut collect = Collect::new(agg, procs.sockets(), &rt, dump);
+    let mut collect = Collect::new(agg, procs.sockets(), &rt, node);
+
+    let shutdown2 = shutdown.clone();
+    let dump      = collect.dump();
+    thread::spawn(|| signals(shutdown2, dump));
 
     let (tx, rx) = bounded(1_000);
     let mut sources = Sources::new(config, tx);

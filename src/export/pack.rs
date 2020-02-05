@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::net::IpAddr;
 use anyhow::{Result, anyhow};
 use capnp::{message::Builder, serialize_packed, struct_list};
@@ -5,7 +6,8 @@ use pnet::{packet::PrimitiveValues, util::MacAddr};
 use kentik_api::Device;
 use crate::chf_capnp::*;
 use crate::capture::{Direction, Protocol};
-use crate::collect::Record;
+use crate::collect::{Meta, Record};
+use crate::sockets::Process;
 
 pub fn pack(device: &Device, records: Vec<Record>) -> Result<Vec<u8>> {
     let column = |name: &str| {
@@ -26,6 +28,8 @@ pub fn pack(device: &Device, records: Vec<Record>) -> Result<Vec<u8>> {
     let str03 = column("STR03")?;
     let str04 = column("STR04")?;
     let str05 = column("STR05")?;
+    let str06 = column("STR06")?;
+    let str07 = column("STR07")?;
 
     let mut msg  = Builder::new_default();
     let root = msg.init_root::<packed_c_h_f::Builder>();
@@ -78,21 +82,24 @@ pub fn pack(device: &Device, records: Vec<Record>) -> Result<Vec<u8>> {
             }
         };
 
+        let columns = |meta: &Meta| {
+            let node = match meta.node {
+                None     => 0,
+                Some(..) => 1,
+            };
+
+            let proc = match meta.proc.as_ref().map(Arc::as_ref) {
+                None                                      => 0,
+                Some(Process { container: None,     .. }) => 3,
+                Some(Process { container: Some(..), .. }) => 4,
+            };
+
+            node + proc
+        };
+
         let mut count = 2;
-
-        if let Some(proc) = src {
-            count += match proc.container {
-                Some(_) => 4,
-                None    => 3,
-            }
-        }
-
-        if let Some(proc) = dst {
-            count += match proc.container {
-                Some(_) => 4,
-                None    => 3,
-            }
-        }
+        count += columns(&src);
+        count += columns(&dst);
 
         let mut customs = Customs::new(msg.init_custom(count));
 
@@ -100,8 +107,7 @@ pub fn pack(device: &Device, records: Vec<Record>) -> Result<Vec<u8>> {
         customs.next(app, |v| v.set_uint32_val(1));
         customs.next(lat, |v| v.set_uint32_val(srtt));
 
-
-        if let Some(proc) = src {
+        if let Some(proc) = &src.proc {
             log::trace!("{} -> {}: {} ({})", flow.src, flow.dst, proc.comm, proc.pid);
 
             customs.next(int01, |v| v.set_uint32_val(proc.pid));
@@ -112,7 +118,7 @@ pub fn pack(device: &Device, records: Vec<Record>) -> Result<Vec<u8>> {
             }
         }
 
-        if let Some(proc) = dst {
+        if let Some(proc) = &dst.proc {
             log::trace!("{} -> {}: {} ({})", flow.src, flow.dst, proc.comm, proc.pid);
 
             customs.next(int02, |v| v.set_uint32_val(proc.pid));
@@ -121,6 +127,14 @@ pub fn pack(device: &Device, records: Vec<Record>) -> Result<Vec<u8>> {
             if let Some(id) = &proc.container {
                 customs.next(str05, |v| v.set_str_val(&id));
             }
+        }
+
+        if let Some(node) = &src.node {
+            customs.next(str06, |v| v.set_str_val(&node));
+        }
+
+        if let Some(node) = &dst.node {
+            customs.next(str07, |v| v.set_str_val(&node));
         }
     }
 

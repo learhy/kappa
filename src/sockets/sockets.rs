@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use log::trace;
 use parking_lot::Mutex;
 use crate::capture::flow::{Flow, Key};
-use crate::collect::Record;
+use crate::collect::{Meta, Record};
 use super::{Event, Kind, Process};
 
 pub struct Sockets {
@@ -34,22 +34,29 @@ impl Sockets {
         })
     }
 
-    pub fn merge(&self, flow: Vec<Flow>) -> Vec<Record> {
+    pub fn merge(&self, flow: Vec<Flow>, node: Option<Arc<String>>) -> Vec<Record> {
         let mut socks = self.socks.lock();
 
         let now  = Instant::now();
         let srtt = Mutex::new(Duration::from_micros(0));
-        let mut lookup = |key: &Key| {
-            socks.get_mut(key).map(|s| {
+
+        let mut meta = |key: &Key| {
+            let proc = socks.get_mut(key).map(|s| {
                 s.seen = now;
                 *srtt.lock() = s.srtt;
                 s.proc.clone()
-            })
+            });
+
+            Meta {
+                proc: proc,
+                node: node.clone(),
+                ..Default::default()
+            }
         };
 
         flow.into_iter().map(|flow| {
-            let src = lookup(&Key(flow.protocol, flow.src, flow.dst));
-            let dst = lookup(&Key(flow.protocol, flow.dst, flow.src));
+            let src = meta(&Key(flow.protocol, flow.src, flow.dst));
+            let dst = meta(&Key(flow.protocol, flow.dst, flow.src));
             Record {
                 flow: flow,
                 src:  src,

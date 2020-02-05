@@ -16,22 +16,27 @@ use crate::sockets::Sockets;
 use super::Record;
 
 pub struct Collect {
+    node:  Option<Arc<String>>,
     tx:    Sender<Vec<Record>>,
     socks: Arc<Sockets>,
+    dump:  Arc<AtomicBool>,
 }
 
 impl Collect {
-    pub fn new(agg: String, socks: Arc<Sockets>, rt: &Runtime, dump: Arc<AtomicBool>) -> Self {
+    pub fn new(agg: String, socks: Arc<Sockets>, rt: &Runtime, node: Option<String>) -> Self {
+        let dump = Arc::new(AtomicBool::new(false));
         let (tx, rx) = channel(1024);
-        rt.spawn(dispatch(agg, rx, dump));
+        rt.spawn(dispatch(agg, rx, dump.clone()));
         Self {
+            node:  node.map(Arc::new),
             tx:    tx,
             socks: socks,
+            dump:  dump,
         }
     }
 
     pub fn collect(&mut self, flows: Vec<Flow>) -> Result<()> {
-        let records = self.socks.merge(flows);
+        let records = self.socks.merge(flows, self.node.clone());
         match self.tx.try_send(records) {
             Ok(()) => (),
             Err(e) => warn!("dispatch queue full: {:?}", e),
@@ -39,6 +44,10 @@ impl Collect {
         self.socks.compact();
 
         Ok(())
+    }
+
+    pub fn dump(&self) -> Arc<AtomicBool> {
+        self.dump.clone()
     }
 }
 
@@ -81,8 +90,8 @@ async fn connect(agg: &str) -> TcpStream {
 }
 
 fn print(rec: &Record) {
-    let src = rec.src.as_ref().map(|p| p.comm.as_str()).unwrap_or("??");
-    let dst = rec.dst.as_ref().map(|p| p.comm.as_str()).unwrap_or("??");
+    let src = rec.src.proc.as_ref().map(|p| p.comm.as_str()).unwrap_or("??");
+    let dst = rec.dst.proc.as_ref().map(|p| p.comm.as_str()).unwrap_or("??");
     debug!("{}:{} -> {}:{}: {} -> {}",
            rec.flow.src.addr, rec.flow.src.port,
            rec.flow.dst.addr, rec.flow.dst.port,
