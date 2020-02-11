@@ -1,46 +1,45 @@
-use isahc::prelude::*;
-use http::{Method, StatusCode, request::Builder};
+use http::{Method, StatusCode};
+use reqwest::{Client as HttpClient, Request, Response};
+use reqwest::header::{CONTENT_TYPE, HeaderValue};
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use crate::Error;
 
 pub struct Client {
     pub(crate) client: HttpClient,
-    pub(crate) email:  String,
-    pub(crate) token:  String,
+    pub(crate) email:  HeaderValue,
+    pub(crate) token:  HeaderValue,
     pub(crate) urls:   Urls,
 }
 
 impl Client {
     pub fn new(email: &str, token: &str, region: Option<&str>) -> Result<Self, Error> {
         Ok(Self {
-            client: HttpClient::new()?,
-            email:  email.to_owned(),
-            token:  token.to_owned(),
+            client: HttpClient::new(),
+            email:  HeaderValue::from_str(email)?,
+            token:  HeaderValue::from_str(token)?,
             urls:   Urls::new(region),
         })
     }
 
     pub async fn get<T: DeserializeOwned>(&self, url: &str) -> Result<T, Error> {
-        let request = self.request(url).body(Body::empty())?;
-        let mut res = self.send(request).await?;
-        Ok(res.body_mut().json()?)
+        let request  = self.request(Method::GET, url)?;
+        let response = self.send(request).await?;
+        Ok(response.json().await?)
     }
 
     pub async fn post<T: Serialize, U: DeserializeOwned>(&self, url: &str, body: &T) -> Result<U, Error> {
         let body = serde_json::to_vec(body)?;
 
-        let mut request = self.request(url);
-        request.method(Method::POST);
-        request.header("Content-Type", "application/json");
+        let mut request = self.request(Method::POST, url)?;
+        request.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        request.body_mut().replace(body.into());
 
-        let request = request.body(body.into())?;
-        let mut res = self.send(request).await?;
-
-        Ok(res.body_mut().json()?)
+        let response = self.send(request).await?;
+        Ok(response.json().await?)
     }
 
-    pub async fn send(&self, request: Request<Body>) -> Result<Response<Body>, Error> {
-        let response = self.client.send_async(request).await?;
+    pub async fn send(&self, request: Request) -> Result<Response, Error> {
+        let response = self.client.execute(request).await?;
         let status   = response.status();
         match status {
             _ if status.is_success() => Ok(response),
@@ -49,25 +48,23 @@ impl Client {
         }
     }
 
-    pub(crate) fn request(&self, url: &str) -> Builder {
-        let mut builder = Request::builder();
-        builder.uri(url);
-        builder.header("X-CH-Auth-Email",     &self.email);
-        builder.header("X-CH-Auth-API-Token", &self.token);
-        builder
+    pub(crate) fn request(&self, method: Method, url: &str) -> Result<Request, Error> {
+        let mut req = Request::new(method, url.parse()?);
+        req.headers_mut().insert("X-CH-Auth-Email",     self.email.clone());
+        req.headers_mut().insert("X-CH-Auth-API-Token", self.token.clone());
+        Ok(req)
     }
 }
 
-async fn error(mut response: Response<Body>) -> Result<Error, Error> {
+async fn error(response: Response) -> Result<Error, Error> {
     let status = response.status();
-    let body   = response.body_mut();
 
     #[derive(Deserialize)]
     struct Wrapper {
         error: String,
     }
 
-    Ok(match body.json::<Wrapper>() {
+    Ok(match response.json::<Wrapper>().await {
         Ok(w)  => Error::App(w.error, status.into()),
         Err(_) => Error::Status(status.into()),
     })

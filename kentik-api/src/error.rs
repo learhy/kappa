@@ -10,20 +10,26 @@ pub enum Error {
     Other(String),
 }
 
-impl From<http::Error> for Error {
-    fn from(err: http::Error) -> Self {
+impl From<reqwest::Error> for Error {
+    fn from(err: reqwest::Error) -> Self {
         Error::Other(err.to_string())
     }
 }
 
-impl From<isahc::Error> for Error {
-    fn from(err: isahc::Error) -> Self {
+impl From<reqwest::header::InvalidHeaderValue> for Error {
+    fn from(err: reqwest::header::InvalidHeaderValue) -> Self {
         Error::Other(err.to_string())
     }
 }
 
 impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Self {
+        Error::Other(err.to_string())
+    }
+}
+
+impl From<url::ParseError> for Error {
+    fn from(err: url::ParseError) -> Self {
         Error::Other(err.to_string())
     }
 }
