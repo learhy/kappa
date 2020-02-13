@@ -9,7 +9,7 @@ use crate::capture::{Direction, Protocol};
 use crate::collect::{Meta, Record};
 use crate::sockets::Process;
 
-pub fn pack(device: &Device, records: Vec<Record>) -> Result<Vec<u8>> {
+pub fn pack(device: &Device, records: &[Record]) -> Result<Vec<u8>> {
     let column = |name: &str| {
         match device.customs.iter().find(|c| c.name == name) {
             Some(c) => Ok(c.id as u32),

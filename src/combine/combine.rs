@@ -97,12 +97,14 @@ impl Combine {
             export.iter().for_each(print)
         }
 
-        let rs  = export.drain().map(|(_, r)| r).collect();
-        let msg = pack(&self.device, rs)?;
+        let rs = export.drain().map(|(_, r)| r).collect::<Vec<_>>();
 
-        let client = self.client.clone();
-        let device = self.device.clone();
-        tokio::spawn(send(client, device, msg));
+        for chunk in rs.chunks(16384) {
+            let msg = pack(&self.device, chunk)?;
+            let client = self.client.clone();
+            let device = self.device.clone();
+            tokio::spawn(send(client, device, msg));
+        }
 
         Ok(())
     }

@@ -29,12 +29,14 @@ impl Export {
 
     pub fn export(&mut self, flows: Vec<Flow>, node: Option<Arc<String>>) -> Result<()> {
         debug!("exporting {} flows", flows.len());
-        let rs  = self.socks.merge(flows, node);
-        let msg = pack(&self.device, rs)?;
+        let rs = self.socks.merge(flows, node);
 
-        let client = self.client.clone();
-        let device = self.device.clone();
-        self.rt.spawn(send(client, device, msg));
+        for chunk in rs.chunks(16384) {
+            let msg = pack(&self.device, chunk)?;
+            let client = self.client.clone();
+            let device = self.device.clone();
+            self.rt.spawn(send(client, device, msg));
+        }
 
         self.socks.compact();
 
