@@ -12,6 +12,7 @@ use tokio_serde::{SymmetricallyFramed, formats::SymmetricalJson};
 use tokio_util::codec::{FramedRead, LengthDelimitedCodec};
 use kentik_api::Client;
 use crate::args::opt;
+use crate::augment::Augment;
 use crate::collect::Record;
 use crate::combine::Combine;
 use crate::export::get_or_create_device;
@@ -23,6 +24,7 @@ pub fn agg(args: &ArgMatches) -> Result<()> {
     let plan     = opt(args.value_of("plan"))?;
     let region   = args.value_of("region");
     let interval = value_t!(args, "interval", u64)?;
+    let augment  = value_t!(args, "augment", String)?;
     let addr     = value_t!(args, "addr", String)?;
 
     let interval = Duration::from_secs(interval);
@@ -34,7 +36,8 @@ pub fn agg(args: &ArgMatches) -> Result<()> {
         Err(e)     => panic!("{:}", e),
     };
 
-    let combine  = Arc::new(Combine::new(client, device));
+    let augment  = Arc::new(Augment::new(augment));
+    let combine  = Arc::new(Combine::new(client, device, augment.clone()));
     let combine2 = combine.clone();
     let combine3 = combine.clone();
 
@@ -44,6 +47,8 @@ pub fn agg(args: &ArgMatches) -> Result<()> {
             Err(e) => error!("agg failed: {}", e),
         }
     });
+
+    rt.spawn(augment.listen());
     rt.spawn(export(interval, combine3));
 
     let signals = Signals::new(&[SIGINT, SIGTERM, SIGUSR1])?;

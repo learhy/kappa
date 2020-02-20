@@ -38,5 +38,7 @@ async fn create_device(client: Arc<Client>, name: &str, plan: Option<u64>) -> Re
 pub use export::Export;
 pub use pack::pack;
 
+mod column;
+mod custom;
 mod export;
 mod pack;

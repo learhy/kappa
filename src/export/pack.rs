@@ -1,13 +1,14 @@
-use std::sync::Arc;
 use std::net::IpAddr;
 use anyhow::{Result, anyhow};
-use capnp::{message::Builder, serialize_packed, struct_list};
+use capnp::{message::Builder, serialize_packed};
+use log::{log_enabled, trace, Level::Trace};
 use pnet::{packet::PrimitiveValues, util::MacAddr};
 use kentik_api::Device;
 use crate::chf_capnp::*;
 use crate::capture::{Direction, Protocol};
-use crate::collect::{Meta, Record};
-use crate::sockets::Process;
+use crate::collect::Record;
+use super::column::Columns;
+use super::custom::Customs;
 
 pub fn pack(device: &Device, records: &[Record]) -> Result<Vec<u8>> {
     let column = |name: &str| {
@@ -30,6 +31,18 @@ pub fn pack(device: &Device, records: &[Record]) -> Result<Vec<u8>> {
     let str05 = column("STR05")?;
     let str06 = column("STR06")?;
     let str07 = column("STR07")?;
+    let str08 = column("STR08")?;
+    let str09 = column("STR09")?;
+    let str10 = column("STR10")?;
+    let str12 = column("STR12")?;
+    let str11 = column("STR11")?;
+    let str13 = column("STR13")?;
+    let str14 = column("STR14")?;
+    let str15 = column("STR15")?;
+    let str16 = column("STR16")?;
+    let str17 = column("STR17")?;
+    let str18 = column("STR18")?;
+    let str19 = column("STR19")?;
 
     let mut msg  = Builder::new_default();
     let root = msg.init_root::<packed_c_h_f::Builder>();
@@ -82,24 +95,18 @@ pub fn pack(device: &Device, records: &[Record]) -> Result<Vec<u8>> {
             }
         };
 
-        let columns = |meta: &Meta| {
-            let node = match meta.node {
-                None     => 0,
-                Some(..) => 1,
-            };
+        let src = Columns::new(src);
+        let dst = Columns::new(dst);
 
-            let proc = match meta.proc.as_ref().map(Arc::as_ref) {
-                None                                      => 0,
-                Some(Process { container: None,     .. }) => 3,
-                Some(Process { container: Some(..), .. }) => 4,
-            };
-
-            node + proc
-        };
+        if log_enabled!(Trace) {
+            trace!("{} -> {}", flow.src, flow.dst);
+            src.trace("src");
+            dst.trace("dst");
+        }
 
         let mut count = 2;
-        count += columns(&src);
-        count += columns(&dst);
+        count += src.count();
+        count += dst.count();
 
         let mut customs = Customs::new(msg.init_custom(count));
 
@@ -107,34 +114,60 @@ pub fn pack(device: &Device, records: &[Record]) -> Result<Vec<u8>> {
         customs.next(app, |v| v.set_uint32_val(1));
         customs.next(lat, |v| v.set_uint32_val(srtt));
 
-        if let Some(proc) = &src.proc {
-            log::trace!("{} -> {}: {} ({})", flow.src, flow.dst, proc.comm, proc.pid);
-
+        if let Some(proc) = src.proc {
             customs.next(int01, |v| v.set_uint32_val(proc.pid));
-            customs.next(str00, |v| v.set_str_val(&proc.comm));
-            customs.next(str01, |v| v.set_str_val(&proc.cmdline.join(" ")));
-            if let Some(id) = &proc.container {
-                customs.next(str02, |v| v.set_str_val(&id));
+            customs.next(str00, |v| v.set_str_val(proc.comm));
+            customs.next(str01, |v| v.set_str_val(&proc.cmdline));
+            if let Some(id) = proc.container {
+                customs.next(str02, |v| v.set_str_val(id));
             }
         }
 
-        if let Some(proc) = &dst.proc {
-            log::trace!("{} -> {}: {} ({})", flow.src, flow.dst, proc.comm, proc.pid);
-
+        if let Some(proc) = dst.proc {
             customs.next(int02, |v| v.set_uint32_val(proc.pid));
-            customs.next(str03, |v| v.set_str_val(&proc.comm));
-            customs.next(str04, |v| v.set_str_val(&proc.cmdline.join(" ")));
-            if let Some(id) = &proc.container {
-                customs.next(str05, |v| v.set_str_val(&id));
+            customs.next(str03, |v| v.set_str_val(proc.comm));
+            customs.next(str04, |v| v.set_str_val(&proc.cmdline));
+            if let Some(id) = proc.container {
+                customs.next(str05, |v| v.set_str_val(id));
             }
         }
 
-        if let Some(node) = &src.node {
-            customs.next(str06, |v| v.set_str_val(&node));
+        if let Some(node) = src.node {
+            customs.next(str06, |v| v.set_str_val(node));
         }
 
-        if let Some(node) = &dst.node {
-            customs.next(str07, |v| v.set_str_val(&node));
+        if let Some(node) = dst.node {
+            customs.next(str07, |v| v.set_str_val(node));
+        }
+
+        if let Some(kube) = src.kube {
+            customs.next(str08, |v| v.set_str_val(kube.name));
+            customs.next(str09, |v| v.set_str_val(kube.ns));
+            customs.next(str10, |v| v.set_str_val(kube.kind));
+
+            if let Some(c) = kube.container {
+                customs.next(str11, |v| v.set_str_val(c.name));
+            }
+
+            if let Some(w) = kube.workload {
+                customs.next(str12, |v| v.set_str_val(&w.name));
+                customs.next(str13, |v| v.set_str_val(&w.ns));
+            }
+        }
+
+        if let Some(kube) = dst.kube {
+            customs.next(str14, |v| v.set_str_val(kube.name));
+            customs.next(str15, |v| v.set_str_val(kube.ns));
+            customs.next(str16, |v| v.set_str_val(kube.kind));
+
+            if let Some(c) = kube.container {
+                customs.next(str17, |v| v.set_str_val(c.name));
+            }
+
+            if let Some(w) = kube.workload {
+                customs.next(str18, |v| v.set_str_val(&w.name));
+                customs.next(str19, |v| v.set_str_val(&w.ns));
+            }
         }
     }
 
@@ -153,25 +186,4 @@ fn pack_mac(mac: &MacAddr) -> u64 {
     (prims.3 as u64) << 16 |
     (prims.4 as u64) << 8  |
     (prims.5 as u64)
-}
-
-struct Customs<'a> {
-    builder: struct_list::Builder<'a, custom::Owned>,
-    index:   u32,
-}
-
-impl<'a> Customs<'a> {
-    fn new(b: struct_list::Builder<'a, custom::Owned>) -> Self {
-        Self {
-            builder: b,
-            index:   0,
-        }
-    }
-
-    fn next<F: Fn(&mut custom::value::Builder)>(&mut self, id: u32, f: F) {
-        let mut custom = self.builder.reborrow().get(self.index);
-        custom.set_id(id);
-        f(&mut custom.init_value());
-        self.index += 1;
-    }
 }

@@ -4,6 +4,7 @@ use reqwest::header::{CONTENT_TYPE, HeaderValue};
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use crate::Error;
 
+#[derive(Clone)]
 pub struct Client {
     pub(crate) client: HttpClient,
     pub(crate) email:  HeaderValue,

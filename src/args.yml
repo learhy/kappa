@@ -110,6 +110,11 @@ subcommands:
             help: export interval (s)
             takes_value: true
             default_value: "15"
+        - augment:
+            long: augment
+            help: augment address
+            takes_value: true
+            default_value: "0.0.0.0:4001"
         - addr:
             index: 1
             help: listen address

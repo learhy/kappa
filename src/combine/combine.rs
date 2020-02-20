@@ -7,6 +7,7 @@ use anyhow::Result;
 use log::debug;
 use parking_lot::Mutex;
 use kentik_api::{Client, Device};
+use crate::augment::Augment;
 use crate::capture::flow::{Addr, Key};
 use crate::collect::{Meta, Record};
 use crate::export::{pack, send};
@@ -19,9 +20,11 @@ pub struct Combine {
     client:  Arc<Client>,
     device:  Arc<Device>,
     dump:    AtomicBool,
+    augment: Arc<Augment>,
     timeout: Duration,
 }
 
+#[derive(Debug)]
 pub struct Source {
     node: Option<Arc<String>>,
     proc: Option<Arc<Process>>,
@@ -29,7 +32,7 @@ pub struct Source {
 }
 
 impl Combine {
-    pub fn new(client: Arc<Client>, device: Device) -> Self {
+    pub fn new(client: Arc<Client>, device: Device, augment: Arc<Augment>) -> Self {
         Self {
             queue:   Mutex::new(HashMap::new()),
             empty:   Mutex::new(HashMap::new()),
@@ -37,6 +40,7 @@ impl Combine {
             client:  client,
             device:  Arc::new(device),
             dump:    AtomicBool::new(false),
+            augment: augment,
             timeout: Duration::from_secs(60),
         }
     }
@@ -97,7 +101,9 @@ impl Combine {
             export.iter().for_each(print)
         }
 
-        let rs = export.drain().map(|(_, r)| r).collect::<Vec<_>>();
+        let mut rs = export.drain().map(|(_, r)| r).collect::<Vec<_>>();
+
+        self.augment.merge(&mut rs);
 
         for chunk in rs.chunks(16384) {
             let msg = pack(&self.device, chunk)?;

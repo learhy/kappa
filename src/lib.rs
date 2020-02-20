@@ -3,6 +3,7 @@ pub mod agg;
 pub mod probe;
 
 pub mod args;
+pub mod augment;
 pub mod capture;
 pub mod collect;
 pub mod combine;
