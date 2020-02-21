@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use log::trace;
-use crate::augment::{self, Object};
+use crate::augment::{Object, Pod, Service};
 use crate::collect::Meta;
 use crate::sockets::Process;
 
@@ -21,6 +21,7 @@ pub struct Kube<'a>  {
     pub name:      &'a str,
     pub ns:        &'a str,
     pub kind:      &'static str,
+    pub labels:    &'a str,
     pub container: Option<Container<'a>>,
     pub workload:  Option<Workload<'a>>,
 }
@@ -100,7 +101,7 @@ impl<'a> Kube<'a> {
     }
 
     fn count(&self) -> u32 {
-        let mut count = 3;
+        let mut count = 4;
 
         if let Some(..) = &self.container {
             count += 1;
@@ -114,27 +115,29 @@ impl<'a> Kube<'a> {
     }
 }
 
-fn pod<'a>(pod: &'a augment::Pod, proc: Option<&'a Process>) -> Kube<'a> {
+fn pod<'a>(pod: &'a Pod, proc: Option<&'a Process>) -> Kube<'a> {
     Kube {
         name:      &pod.name,
         ns:        &pod.ns,
         kind:      "pod",
+        labels:    &pod.labels,
         container: container(pod, proc),
         workload:  None,
     }
 }
 
-fn service<'a>(svc: &'a augment::Service) -> Kube<'a> {
+fn service<'a>(svc: &'a Service) -> Kube<'a> {
     Kube {
         name:      &svc.name,
         ns:        &svc.ns,
         kind:      "service",
+        labels:    &svc.labels,
         container: None,
         workload:  None,
     }
 }
 
-fn container<'a>(pod: &'a augment::Pod, proc: Option<&'a Process>) -> Option<Container<'a>> {
+fn container<'a>(pod: &'a Pod, proc: Option<&'a Process>) -> Option<Container<'a>> {
     let id = proc?.container.as_ref()?.as_str();
     let c  = pod.containers.iter().find(|c| c.id == id)?;
     Some(Container {

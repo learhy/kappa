@@ -43,6 +43,8 @@ pub fn pack(device: &Device, records: &[Record]) -> Result<Vec<u8>> {
     let str17 = column("STR17")?;
     let str18 = column("STR18")?;
     let str19 = column("STR19")?;
+    let str20 = column("STR20")?;
+    let str21 = column("STR21")?;
 
     let mut msg  = Builder::new_default();
     let root = msg.init_root::<packed_c_h_f::Builder>();
@@ -145,14 +147,16 @@ pub fn pack(device: &Device, records: &[Record]) -> Result<Vec<u8>> {
             customs.next(str09, |v| v.set_str_val(kube.ns));
             customs.next(str10, |v| v.set_str_val(kube.kind));
 
-            if let Some(c) = kube.container {
+            if let Some(c) = &kube.container {
                 customs.next(str11, |v| v.set_str_val(c.name));
             }
 
-            if let Some(w) = kube.workload {
+            if let Some(w) = &kube.workload {
                 customs.next(str12, |v| v.set_str_val(&w.name));
                 customs.next(str13, |v| v.set_str_val(&w.ns));
             }
+
+            customs.next(str20, |v| v.set_str_val(kube.labels));
         }
 
         if let Some(kube) = dst.kube {
@@ -160,14 +164,16 @@ pub fn pack(device: &Device, records: &[Record]) -> Result<Vec<u8>> {
             customs.next(str15, |v| v.set_str_val(kube.ns));
             customs.next(str16, |v| v.set_str_val(kube.kind));
 
-            if let Some(c) = kube.container {
+            if let Some(c) = &kube.container {
                 customs.next(str17, |v| v.set_str_val(c.name));
             }
 
-            if let Some(w) = kube.workload {
+            if let Some(w) = &kube.workload {
                 customs.next(str18, |v| v.set_str_val(&w.name));
                 customs.next(str19, |v| v.set_str_val(&w.ns));
             }
+
+            customs.next(str21, |v| v.set_str_val(kube.labels));
         }
     }
 

@@ -12,6 +12,7 @@ pub enum Object {
 pub struct Pod {
     pub name:       String,
     pub ns:         String,
+    pub labels:     String,
     pub ip:         IP,
     pub containers: Vec<Container>,
     pub workload:   Option<Workload>,
@@ -19,9 +20,10 @@ pub struct Pod {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Service {
-    pub name: String,
-    pub ns:   String,
-    pub ip:   IpAddr,
+    pub name:   String,
+    pub ns:     String,
+    pub labels: String,
+    pub ip:     IpAddr,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
