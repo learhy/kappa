@@ -1,9 +1,10 @@
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use log::trace;
 use parking_lot::Mutex;
-use crate::capture::flow::{Flow, Key};
+use crate::capture::flow::{Flow, Protocol};
 use crate::collect::{Meta, Record};
 use super::{Event, Kind, Process};
 
@@ -11,6 +12,9 @@ pub struct Sockets {
     socks:   Mutex<HashMap<Key, Socket>>,
     timeout: Duration,
 }
+
+#[derive(Debug, Hash, Eq, PartialEq)]
+pub struct Key(Protocol, IpAddr, u16);
 
 #[derive(Debug)]
 pub struct Socket {
@@ -55,8 +59,8 @@ impl Sockets {
         };
 
         flow.into_iter().map(|flow| {
-            let src = meta(&Key(flow.protocol, flow.src, flow.dst));
-            let dst = meta(&Key(flow.protocol, flow.dst, flow.src));
+            let src = meta(&Key(flow.protocol, flow.src.addr, flow.src.port));
+            let dst = meta(&Key(flow.protocol, flow.dst.addr, flow.dst.port));
             Record {
                 flow: flow,
                 src:  src,
@@ -77,7 +81,7 @@ impl Sockets {
     }
 
     fn insert(&self, Event { kind, proto, src, dst, proc, srtt, .. }: Event) {
-        let key = Key(proto, src.into(), dst.into());
+        let key = Key(proto, src.ip(), src.port());
 
         let new = || {
             trace!("{:?} {} -> {}: {} ({})", kind, src, dst, proc.comm, proc.pid);
