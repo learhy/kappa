@@ -34,6 +34,12 @@ impl From<url::ParseError> for Error {
     }
 }
 
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        Error::Other(err.to_string())
+    }
+}
+
 impl std::error::Error for Error {}
 
 impl fmt::Display for Error {
