@@ -1,0 +1,26 @@
+version: "3.4"
+services:
+  agg:
+    container_name: kappa-agg
+    build: .
+    image: kappa:latest
+    command: ./kappa agg -v 127.0.0.1:4000
+    environment:
+      KENTIK_EMAIL:  <email>
+      KENTIK_TOKEN:  <token>
+      KENTIK_DEVICE: <device>
+    network_mode: host
+  agent:
+    container_name: kappa-agent
+    build: .
+    image: kappa:latest
+    command: ./kappa agent -c ".*" -vv 127.0.0.1:4000
+    network_mode: host
+    pid: host
+    privileged: true
+    volumes:
+      - "/sys/kernel/debug:/sys/kernel/debug"
+    ulimits:
+      memlock: 1024000
+    depends_on:
+      - agg
