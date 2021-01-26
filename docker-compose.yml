@@ -2,7 +2,9 @@ version: "3.4"
 services:
   agg:
     container_name: kappa-agg
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.compose
     image: kappa:latest
     command: ./kappa agg -v 127.0.0.1:4000
     environment:
@@ -12,7 +14,9 @@ services:
     network_mode: host
   agent:
     container_name: kappa-agent
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.compose
     image: kappa:latest
     command: ./kappa agent -c ".*" -vv 127.0.0.1:4000
     network_mode: host

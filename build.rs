@@ -16,6 +16,7 @@ fn main() {
         println!("cargo:rustc-link-search=native={}/libs/macos", base);
         println!("cargo:rustc-link-lib=static=pcap");
     } else if target.contains("linux-musl") {
+        println!("cargo:rustc-link-search=native=/usr/local/lib");
         println!("cargo:rustc-link-search=native={}/libs/musl", base);
         println!("cargo:rustc-link-lib=static=pcap");
     }
