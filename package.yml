@@ -1,0 +1,22 @@
+meta:
+  description: Kentik Kappa
+  vendor: Kentik
+  maintainer: Kentik
+files:
+  "/opt/kentik/kappa/kappa":
+    file: kappa
+    mode: "0755"
+    user: kappa
+  "/etc/default/kappa":
+    file: pkg/etc/default/kappa
+    mode: "0644"
+    keep: true
+dirs:
+  - /opt/kentik/kappa
+  - /var/lib/kappa
+units:
+  - pkg/etc/systemd/system/kappa-agent.service
+  - pkg/etc/systemd/system/kappa-agg.service
+scripts:
+  "post-install": pkg/scripts/post-install
+user: kappa
