@@ -23,7 +23,7 @@ pub fn peer(Peer { index, nsid }: Peer) -> Result<(File, Link)> {
 }
 
 fn find(index: u32) -> Result<Link> {
-    let mut sock  = Socket::new(Family::Route)?;
+    let mut sock  = Socket::new(Family::ROUTE)?;
     let links = links(&mut sock)?;
 
     let link = match links.into_iter().find(|l| l.index == index) {

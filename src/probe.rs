@@ -7,7 +7,7 @@ use crossbeam_channel::bounded;
 use log::warn;
 use nixv::Version;
 use regex::Regex;
-use signal_hook::{flag::register, SIGINT, SIGTERM};
+use signal_hook::{flag::register, consts::signal::{SIGINT, SIGTERM}};
 use kentik_api::Client;
 use crate::args::{opt, read};
 use crate::capture::{self, Sample, Sources};

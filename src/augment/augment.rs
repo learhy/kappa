@@ -81,7 +81,7 @@ impl Augment {
 
 
 async fn listen(addr: String, augment: Arc<Augment>) -> Result<()> {
-    let mut listener = TcpListener::bind(&addr).await?;
+    let listener = TcpListener::bind(&addr).await?;
     loop {
         let (sock, addr) = listener.accept().await?;
         debug!("connection from {}", addr);

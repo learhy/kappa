@@ -6,10 +6,11 @@ use anyhow::{Result, anyhow};
 use nell::{Family, Message, Netlink};
 use nell::ffi::*;
 use nell::sync::Socket;
-use {Family::Route, Netlink::Msg};
+use nell::sys::Bytes;
+use Netlink::Msg;
 
 pub fn findns(nsid: u32) -> Result<File> {
-    let mut sock = Socket::new(Route)?;
+    let mut sock = Socket::new(Family::ROUTE)?;
 
     let lookup = |name: &OsStr| -> Option<Result<File>> {
         let name = name.to_str()?;
@@ -70,3 +71,5 @@ fn netnsid(sock: &mut Socket, fd: RawFd) -> Result<Option<u32>> {
         _        => Ok(None),
     }
 }
+
+unsafe impl Bytes for nsidmsg {}

@@ -40,7 +40,7 @@ impl Links {
 }
 
 fn monitor(tx: Sender<Event>, shutdown: Arc<AtomicBool>) -> Result<()> {
-    let mut sock = Socket::new(Family::Route)?;
+    let mut sock = Socket::new(Family::ROUTE)?;
 
     for link in links(&mut sock)? {
         if link.flags & IFF_UP > 0 {
@@ -49,16 +49,16 @@ fn monitor(tx: Sender<Event>, shutdown: Arc<AtomicBool>) -> Result<()> {
     }
 
     while !shutdown.load(Ordering::Acquire) {
-        let mut sock = Socket::new(Family::Route)?;
+        let mut sock = Socket::new(Family::ROUTE)?;
         sock.bind(0, RTMGRP_LINK)?;
 
-        while let Netlink::Msg(msg) = sock.recv::<Any>()? {
+        while let Netlink::Msg(msg) = sock.recv::<()>()? {
             if shutdown.load(Ordering::Acquire) {
                 break;
             }
 
             if let Any::IFInfo(msg) = msg.any() {
-                let link = link(msg)?;
+                let link = link(&msg)?;
                 let up = link.flags & IFF_UP > 0 && msg.ifi_change & IFF_PROMISC == 0;
                 match msg.nlmsg_type() {
                     RTM_NEWLINK if up => tx.send(add(link))?,

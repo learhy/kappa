@@ -8,7 +8,7 @@ use futures_util::stream::StreamExt;
 use log::{debug, warn};
 use tokio::net::TcpStream;
 use tokio::runtime::Runtime;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 use tokio_serde::{SymmetricallyFramed, formats::SymmetricalJson};
 use tokio_util::codec::{FramedWrite, LengthDelimitedCodec};
 use crate::capture::Flow;
@@ -85,7 +85,7 @@ async fn connect(agg: &str) -> TcpStream {
 
         warn!("connection error: {}", err);
 
-        delay_for(Duration::from_secs(1)).await;
+        sleep(Duration::from_secs(1)).await;
     }
 }
 

@@ -24,7 +24,7 @@ pub fn links(sock: &mut Socket) -> Result<Vec<Link>> {
     let mut links = Vec::new();
 
     while let Netlink::Msg(msg) = sock.recv::<ifinfomsg>()? {
-        links.push(link(msg)?);
+        links.push(link(&msg)?);
     }
 
     Ok(links)

@@ -8,7 +8,7 @@ use crossbeam_channel::bounded;
 use log::warn;
 use nixv::Version;
 use regex::Regex;
-use signal_hook::{iterator::Signals, SIGINT, SIGTERM, SIGUSR1};
+use signal_hook::{iterator::Signals, consts::signal::{SIGINT, SIGTERM, SIGUSR1}};
 use tokio::runtime::Runtime;
 use crate::args::{opt, read};
 use crate::capture::{self, Sample, Sources};
@@ -84,7 +84,7 @@ fn signals(shutdown: Arc<AtomicBool>, dump: Arc<AtomicBool>) {
         dump.store(!state, Ordering::SeqCst);
     };
 
-    let signals = Signals::new(&[SIGINT, SIGTERM, SIGUSR1]).unwrap();
+    let mut signals = Signals::new(&[SIGINT, SIGTERM, SIGUSR1]).unwrap();
     for signal in signals.forever() {
         match signal {
             SIGINT | SIGTERM => break,

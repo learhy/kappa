@@ -4,10 +4,10 @@ use anyhow::Result;
 use clap::{ArgMatches, value_t};
 use futures::prelude::*;
 use log::{debug, error, warn};
-use signal_hook::{iterator::Signals, SIGINT, SIGTERM, SIGUSR1};
+use signal_hook::{iterator::Signals, consts::signal::{SIGINT, SIGTERM, SIGUSR1}};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::runtime::Runtime;
-use tokio::time;
+use tokio::time::{self, Instant};
 use tokio_serde::{SymmetricallyFramed, formats::SymmetricalJson};
 use tokio_util::codec::{FramedRead, LengthDelimitedCodec};
 use kentik_api::Client;
@@ -29,7 +29,7 @@ pub fn agg(args: &ArgMatches) -> Result<()> {
 
     let interval = Duration::from_secs(interval);
     let client   = Arc::new(Client::new(&email, &token, region)?);
-    let mut rt   = Runtime::new()?;
+    let rt       = Runtime::new()?;
 
     let device = match rt.block_on(get_or_create_device(client.clone(), &device, plan)) {
         Ok(device) => device,
@@ -51,7 +51,7 @@ pub fn agg(args: &ArgMatches) -> Result<()> {
     rt.spawn(augment.listen());
     rt.spawn(export(interval, combine3));
 
-    let signals = Signals::new(&[SIGINT, SIGTERM, SIGUSR1])?;
+    let mut signals = Signals::new(&[SIGINT, SIGTERM, SIGUSR1])?;
     for signal in signals.forever() {
         match signal {
             SIGINT | SIGTERM => break,
@@ -66,7 +66,7 @@ pub fn agg(args: &ArgMatches) -> Result<()> {
 }
 
 async fn execute(addr: String, combine: Arc<Combine>) -> Result<()> {
-    let mut listener = TcpListener::bind(&addr).await?;
+    let listener = TcpListener::bind(&addr).await?;
     loop {
         let (sock, addr) = listener.accept().await?;
         debug!("connection from {}", addr);
@@ -96,8 +96,10 @@ async fn agent(sock: TcpStream, combine: Arc<Combine>) -> Result<()> {
 }
 
 async fn export(interval: Duration, combine: Arc<Combine>) {
-    let mut timer = time::interval(interval);
-    while let Some(_) = timer.next().await {
+    let start = Instant::now() + interval;
+    let mut timer = time::interval_at(start, interval);
+    loop {
+        timer.tick().await;
         if let Err(e) = combine.export() {
             warn!("export failed: {}", e);
         }

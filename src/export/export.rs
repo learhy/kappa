@@ -16,7 +16,7 @@ pub struct Export {
 
 impl Export {
     pub fn new(client: Client, device: &str, plan: Option<u64>, socks: Arc<Sockets>) -> Result<Self> {
-        let mut rt = Runtime::new()?;
+        let rt     = Runtime::new()?;
         let client = Arc::new(client);
         let device = rt.block_on(get_or_create_device(client.clone(), &device, plan))?;
         Ok(Self {
