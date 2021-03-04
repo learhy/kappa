@@ -13,7 +13,6 @@ use crate::args::{opt, read};
 use crate::capture::{self, Sample, Sources};
 use crate::export::Export;
 use crate::link::{Event, Links};
-use crate::probes;
 use crate::sockets::Procs;
 
 pub fn probe(args: &ArgMatches) -> Result<()> {
@@ -72,10 +71,6 @@ pub fn probe(args: &ArgMatches) -> Result<()> {
                 Event::Error(link, e) => warn!("link {} error: {}", link, e),
             }
         }
-    }
-
-    if let Err(e) = probes::clear() {
-        warn!("failed to clear probes {:?}", e);
     }
 
     Ok(())

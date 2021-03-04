@@ -1,7 +1,7 @@
 use std::mem::size_of;
 use std::os::raw::c_int;
-use anyhow::Result;
-use ebpf::bpf::Program;
+use anyhow::{anyhow, Result};
+use ebpf::bpf::{Kind, Program};
 use ebpf::elf::{self, Map};
 use ebpf::ffi::{bpf_map_create_arg};
 use ebpf::ffi::bpf_map_type::BPF_MAP_TYPE_PERF_EVENT_ARRAY;
@@ -10,10 +10,11 @@ use nixv::{Version, kernel};
 use perf::sys::*;
 use perf::ffi::*;
 use super::version::LinuxVersionCode;
-use super::events;
+use super::events::Event;
 
 pub struct Probes {
     programs: Vec<Program>,
+    events:   Vec<Event>,
 }
 
 impl Probes {
@@ -47,17 +48,23 @@ impl Probes {
 
         Ok(Self {
             programs: programs,
+            events:   Vec::new(),
         })
     }
 
-    pub fn open(&self) -> Result<Vec<c_int>> {
+    pub fn open(&mut self) -> Result<Vec<c_int>> {
         let cpus = num_cpus::get();
 
-        for prog in &self.programs {
+        self.events = self.programs.iter().map(|prog| {
             debug!("attaching {}", prog.name);
-            let id = events::create(prog)?.unwrap();
-            let _  = events::attach(id, prog.fd)?;
-        }
+            let event = match &prog.kind {
+                Kind::Kprobe(event)     => Event::kprobe('p', event),
+                Kind::Kretprobe(event)  => Event::kprobe('r', event),
+                Kind::Tracepoint(event) => Event::tracepoint(event),
+                other                   => Err(anyhow!("unsupported: {:?}", other)),
+            }?;
+            Ok(event.attach(prog.fd)?)
+        }).collect::<Result<Vec<_>>>()?;
 
         let map = self.programs.iter().flat_map(|prog| {
             prog.maps.iter().find(|map| map.name == "events")
@@ -79,6 +86,6 @@ impl Probes {
             map.insert(&cpu, &fd)?;
 
             Ok(fd)
-        }).collect::<Result<Vec<c_int>>>()
+        }).collect::<Result<Vec<_>>>()
     }
 }

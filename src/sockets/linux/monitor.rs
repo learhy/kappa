@@ -25,7 +25,7 @@ pub struct Procs {
 impl Procs {
     pub fn watch(kernel: Option<Version>, code: Option<Vec<u8>>, shutdown: Arc<AtomicBool>) -> Result<Self> {
         let code   = code.as_ref().map(Vec::as_slice).unwrap_or(&BYTECODE);
-        let probes = Probes::load(&code[..], kernel)?;
+        let mut probes = Probes::load(&code[..], kernel)?;
         let fds    = probes.open()?;
         let socks  = Arc::new(Sockets::new());
 

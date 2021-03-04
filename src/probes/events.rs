@@ -1,63 +1,102 @@
-use std::fs::{File, OpenOptions};
+use std::fs::{self, OpenOptions};
 use std::io::prelude::*;
 use std::os::raw::c_int;
+use std::path::Path;
 use anyhow::Result;
-use ebpf::bpf::{Kind, Program};
+use log::warn;
 use perf::sys::*;
 use perf::ffi::*;
 
-const SYSFS: &str = "/sys/kernel/debug/tracing";
+pub struct Event {
+    name:    String,
+    id:      u64,
+    clear:   bool,
+    perf_fd: Option<c_int>,
+}
 
-pub fn create(p: &Program) -> Result<Option<u64>> {
-    fn kprobe(c: char, event: &str) -> Result<u64> {
-        let name  = format!("{}_{}", c, event);
-        let event = format!("{}:{} {}", c, name,  event);
+impl Event {
+    pub fn kprobe(c: char, event: &str) -> Result<Self> {
+        let name = format!("{}_{}", c, event);
+        create_kprobe(c, &name, event)?;
+        let id = event_id(&name, true)?;
 
-        let path = format!("{}/kprobe_events", SYSFS);
-        let mut file = create(&path)?;
-        writeln!(file, "{}", event)?;
-
-        Ok(read(&format!("{}/events/kprobes/{}/id", SYSFS, name))?)
+        Ok(Self {
+            name:    name,
+            id:      id,
+            clear:   true,
+            perf_fd: None,
+        })
     }
 
-    fn tracepoint(event: &str) -> Result<u64> {
-        Ok(read(&format!("{}/events/{}/id", SYSFS, event))?)
+    pub fn tracepoint(event: &str) -> Result<Self> {
+        Ok(Event {
+            name:    event.to_owned(),
+            id:      event_id(event, false)?,
+            clear:   false,
+            perf_fd: None,
+        })
     }
 
-    fn create(path: &str) -> Result<File> {
-        Ok(OpenOptions::new().append(true).write(true).open(path)?)
+    pub fn attach(mut self, prog_fd: c_int) -> Result<Self> {
+        let mut attr = perf_event_attr::default();
+        attr.type_       = PERF_TYPE_TRACEPOINT;
+        attr.config      = self.id;
+        attr.sample_type = PERF_SAMPLE_RAW;
+
+        let perf_fd = perf_event_open(&attr, -1, 0, -1, 0)?;
+        perf_event_ioc_enable(perf_fd)?;
+        perf_event_ioc_set_bpf(perf_fd, prog_fd)?;
+
+        self.perf_fd = Some(perf_fd);
+
+        Ok(self)
     }
 
-    fn read(path: &str) -> Result<u64> {
-        let mut file = File::open(path)?;
-        let mut line = String::new();
-        let n = file.read_to_string(&mut line)?;
-        Ok(line[..n-1].parse()?)
-    }
+    pub fn detach(&self) {
+        let Self { ref name, clear, perf_fd, .. } = *self;
 
-    match p.kind {
-        Kind::Kprobe(ref event)     => Ok(Some(kprobe('p', event)?)),
-        Kind::Kretprobe(ref event)  => Ok(Some(kprobe('r', event)?)),
-        Kind::Tracepoint(ref event) => Ok(Some(tracepoint(event)?)),
-        _                           => Ok(None),
+        if let Some(fd) = perf_fd {
+            if unsafe { libc::close(fd) } != 0 {
+                warn!("error closing {} perf fd", name);
+            }
+        }
+
+        if clear {
+            if let Err(e) = clear_kprobe(name) {
+                warn!("error clearing {}: {}", name, e);
+            }
+        }
     }
 }
 
-pub fn attach(id: u64, pfd: c_int) -> Result<c_int> {
-    let mut attr = perf_event_attr::default();
-    attr.type_        = PERF_TYPE_TRACEPOINT;
-    attr.config       = id;
-    attr.sample_type  = PERF_SAMPLE_RAW;
-
-    let fd = perf_event_open(&attr, -1, 0, -1, 0)?;
-
-    perf_event_ioc_enable(fd)?;
-    perf_event_ioc_set_bpf(fd, pfd)?;
-
-    Ok(fd)
+fn event_id(event: &str, kprobe: bool) -> Result<u64> {
+    let mut path = Path::new(SYSFS).join("events");
+    if kprobe { path.push("kprobes"); }
+    path.push(event);
+    path.push("id");
+    Ok(fs::read_to_string(path)?.trim().parse()?)
 }
 
-pub fn clear() -> Result<()> {
-    File::create(format!("{}/kprobe_events", SYSFS))?;
+fn create_kprobe(c: char, name: &str, event: &str) -> Result<()> {
+    let path = Path::new(SYSFS).join("kprobe_events");
+    let line = format!("{}:{} {}", c, name, event);
+    let mut file = OpenOptions::new().append(true).open(path)?;
+    file.write_all(line.as_bytes())?;
     Ok(())
 }
+
+fn clear_kprobe(name: &str) -> Result<()> {
+    let path = Path::new(SYSFS).join("kprobe_events");
+    let line = format!("-:{}", name);
+    let mut file = OpenOptions::new().append(true).open(path)?;
+    file.write_all(line.as_bytes())?;
+    Ok(())
+}
+
+impl Drop for Event {
+    fn drop(&mut self) {
+        self.detach();
+    }
+}
+
+const SYSFS: &str = "/sys/kernel/debug/tracing";
