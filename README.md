@@ -9,6 +9,7 @@ Building kappa is easiest via docker-compose:
 
 ```
 docker-compose up
+docker-compose rm
 ```
 
 This will create a local docker image `kappa:latest` using the `Dockerfile.compose` file. 
@@ -21,9 +22,11 @@ Once you have built the kappa image, run it exporting into a local Grafana/Prome
 git clone git@github.com:kentik/kentik-lite.git
 cd kentik-lite
 docker-compose run --entrypoint fetch ktranslate
+mkdir -p grafana/data
 chmod a+w grafana/data
+mkdir -p prometheus/data
 chmod a+w prometheus/data
-docker-compose -f docker-compose-kappa.yaml
+docker-compose -f docker-compose-kappa.yaml up
 ```
 
 Log into grafana at http://localhost:3000 with `admin/therealdeal`
