@@ -1,49 +1,45 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use anyhow::Result;
-use futures::channel::mpsc::{Receiver, Sender, channel};
+use tokio::sync::mpsc::{Receiver, Sender, channel};
 use futures_util::sink::SinkExt;
-use futures_util::stream::StreamExt;
 use log::{debug, warn};
 use tokio::net::TcpStream;
-use tokio::runtime::Runtime;
+use tokio::runtime::Handle;
 use tokio::time::sleep;
 use tokio_serde::{SymmetricallyFramed, formats::SymmetricalJson};
 use tokio_util::codec::{FramedWrite, LengthDelimitedCodec};
-use crate::capture::Flow;
 use crate::sockets::Sockets;
-use super::Record;
+use super::{Record, Sink};
 
 pub struct Collect {
-    node:  Option<Arc<String>>,
-    tx:    Sender<Vec<Record>>,
-    socks: Arc<Sockets>,
-    dump:  Arc<AtomicBool>,
+    node:   Option<Arc<String>>,
+    tx:     Sender<Vec<Record>>,
+    socks:  Arc<Sockets>,
+    dump:   Arc<AtomicBool>,
+    handle: Handle,
 }
 
 impl Collect {
-    pub fn new(agg: String, socks: Arc<Sockets>, rt: &Runtime, node: Option<String>) -> Self {
+    pub fn new(agg: String, socks: Arc<Sockets>, handle: Handle, node: Option<String>) -> Self {
         let dump = Arc::new(AtomicBool::new(false));
         let (tx, rx) = channel(1024);
-        rt.spawn(dispatch(agg, rx, dump.clone()));
+        handle.spawn(dispatch(agg, rx, dump.clone()));
         Self {
-            node:  node.map(Arc::new),
-            tx:    tx,
-            socks: socks,
-            dump:  dump,
+            node:   node.map(Arc::new),
+            tx:     tx,
+            socks:  socks,
+            dump:   dump,
+            handle: handle,
         }
     }
 
-    pub fn collect(&mut self, flows: Vec<Flow>) -> Result<()> {
-        let records = self.socks.merge(flows, self.node.clone());
-        match self.tx.try_send(records) {
-            Ok(()) => (),
-            Err(e) => warn!("dispatch queue full: {:?}", e),
-        };
-        self.socks.compact();
-
-        Ok(())
+    pub fn sink(&self) -> Sink {
+        let node   = self.node.clone();
+        let socks  = self.socks.clone();
+        let tx     = self.tx.clone();
+        let handle = self.handle.clone();
+        Sink::new(node, socks, tx, handle)
     }
 
     pub fn dump(&self) -> Arc<AtomicBool> {
@@ -62,7 +58,7 @@ async fn dispatch(agg: String, mut rx: Receiver<Vec<Record>>, dump: Arc<AtomicBo
 
         let mut codec = SymmetricallyFramed::new(framed, format);
 
-        while let Some(recs) = rx.next().await {
+        while let Some(recs) = rx.recv().await {
             if dump.load(Ordering::SeqCst) {
                 debug!("collect state:");
                 recs.iter().for_each(print)

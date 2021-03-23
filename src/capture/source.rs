@@ -4,20 +4,19 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use anyhow::Result;
-use crossbeam_channel::Sender;
 use log::{debug, info, warn};
 use parking_lot::Mutex;
-use crate::link::Add;
+use crate::collect::Sink;
+use crate::link::{Add, Event, Links};
 use crate::os::setns;
 use super::{capture, Config, Sample, Timestamp};
 use super::queue::Queue;
-use super::flow::Flow;
 use pcap::Error::*;
 
 pub struct Sources {
-    pub cfg: Arc<Config>,
-    pub tx:  Sender<Vec<Flow>>,
-    pub map: Arc<Mutex<HashMap<String, Source>>>,
+    pub cfg:  Arc<Config>,
+    pub map:  Arc<Mutex<HashMap<String, Source>>>,
+    pub sink: Sink,
 }
 
 #[derive(Debug)]
@@ -26,13 +25,24 @@ pub struct Source {
 }
 
 impl Sources {
-    pub fn new(cfg: Config, tx: Sender<Vec<Flow>>) -> Self {
+    pub fn new(cfg: Config, sink: Sink) -> Self {
         let map = Mutex::new(HashMap::new());
         Self {
-            cfg: Arc::new(cfg),
-            tx:  tx,
-            map: Arc::new(map),
+            cfg:  Arc::new(cfg),
+            map:  Arc::new(map),
+            sink: sink,
         }
+    }
+
+    pub async fn exec(mut self, mut links: Links) -> Result<()> {
+        while let Some(event) = links.recv().await {
+            match event {
+                Event::Add(add)       => self.add(add)?,
+                Event::Delete(link)   => self.del(link),
+                Event::Error(link, e) => warn!("link {} error: {}", link, e),
+            }
+        }
+        Ok(())
     }
 
     pub fn add(&mut self, Add { name, dev, mac, netns }: Add) -> Result<()> {
@@ -51,8 +61,8 @@ impl Sources {
             Sample::None    => 1,
         };
 
-        let sender = self.tx.clone();
-        let queue  = Queue::new(mac, sample, sender, interval);
+        let sink   = self.sink.clone();
+        let queue  = Queue::new(mac, sample, sink, interval);
         let stop   = Arc::new(AtomicBool::new(false));
 
         let source = Source { stop: stop.clone() };

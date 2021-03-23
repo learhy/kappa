@@ -1,44 +1,42 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use anyhow::Result;
-use crossbeam_channel::{Sender, Receiver, TryRecvError, unbounded};
+use tokio::runtime::Handle;
+use tokio::sync::mpsc::{Sender, Receiver, channel};
+use tokio::time::sleep;
 use log::{debug, error};
 use pcap::Device;
 use pnet::datalink;
 use pnet::util::MacAddr;
 use super::{Add, Event};
-use TryRecvError::*;
 
 pub struct Links {
     rx: Receiver<Event>,
 }
 
 impl Links {
-    pub fn watch(shutdown: Arc<AtomicBool>) -> Result<Self> {
-        let (tx, rx) = unbounded();
-        thread::spawn(move || match monitor(tx, shutdown) {
-            Ok(_)  => debug!("link monitor finished"),
-            Err(e) => error!("link monitor failed: {:?}", e),
+    pub fn watch(handle: &Handle, _shutdown: Arc<AtomicBool>) -> Result<Self> {
+        let (tx, rx) = channel(64);
+        handle.spawn(async move {
+            match monitor(tx).await {
+                Ok(_)  => debug!("link monitor finished"),
+                Err(e) => error!("link monitor failed: {:?}", e),
+            }
         });
         Ok(Self { rx })
     }
 
-    pub fn recv(&mut self) -> Result<Option<Event>> {
-        match self.rx.try_recv() {
-            Ok(event)         => Ok(Some(event)),
-            Err(Empty)        => Ok(None),
-            Err(Disconnected) => Ok(None),
-        }
+    pub async fn recv(&mut self) -> Option<Event> {
+        self.rx.recv().await
     }
 }
 
-fn monitor(tx: Sender<Event>, shutdown: Arc<AtomicBool>) -> Result<()> {
+async fn monitor(tx: Sender<Event>) -> Result<()> {
     let mut links = HashSet::new();
 
-    while !shutdown.load(Ordering::Acquire) {
+    loop {
         let macs = datalink::interfaces().into_iter().map(|link| {
             (link.name, link.mac)
         }).collect::<HashMap<_, _>>();
@@ -51,18 +49,17 @@ fn monitor(tx: Sender<Event>, shutdown: Arc<AtomicBool>) -> Result<()> {
 
         for link in curr.difference(&copy) {
             let mac = macs.get(link).and_then(Option::clone);
-            tx.send(add(link, mac))?;
+            tx.send(add(link, mac)).await?;
             links.insert(link.to_string());
         }
 
         for link in copy.difference(&curr) {
-            tx.send(Event::Delete(link.to_string()))?;
+            tx.send(Event::Delete(link.to_string())).await?;
             links.remove(link);
         }
 
-        thread::sleep(Duration::from_secs(60));
+        sleep(Duration::from_secs(60)).await;
     }
-    Ok(())
 }
 
 fn add(link: &str, mac: Option<MacAddr>) -> Event {

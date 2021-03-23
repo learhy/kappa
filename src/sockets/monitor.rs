@@ -9,10 +9,15 @@ pub struct Procs {
 }
 
 impl Procs {
-    pub fn watch(_kernel: Option<Version>, _code: Option<Vec<u8>>, _shutdown: Arc<AtomicBool>) -> Result<Self> {
+    pub fn new(_kernel: Option<Version>, _code: Option<Vec<u8>>) -> Result<Self> {
         Ok(Procs {
             socks: Arc::new(Sockets::new())
         })
+
+    }
+
+    pub fn watch(&mut self, _shutdown: Arc<AtomicBool>) -> Result<()> {
+        Ok(())
     }
 
     pub fn sockets(&self) -> Arc<Sockets> {

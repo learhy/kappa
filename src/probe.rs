@@ -3,16 +3,18 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use anyhow::Result;
 use clap::{ArgMatches, value_t};
-use crossbeam_channel::bounded;
-use log::warn;
+use log::{debug, error, warn};
 use nixv::Version;
 use regex::Regex;
-use signal_hook::{flag::register, consts::signal::{SIGINT, SIGTERM}};
+use signal_hook::{iterator::Signals, consts::signal::{SIGINT, SIGTERM}};
+use tokio::runtime::Runtime;
+use tokio::sync::mpsc::{Receiver, channel};
 use kentik_api::Client;
 use crate::args::{opt, read};
 use crate::capture::{self, Sample, Sources};
+use crate::collect::{Record, Sink};
 use crate::export::Export;
-use crate::link::{Event, Links};
+use crate::link::Links;
 use crate::sockets::Procs;
 
 pub fn probe(args: &ArgMatches) -> Result<()> {
@@ -44,34 +46,62 @@ pub fn probe(args: &ArgMatches) -> Result<()> {
         promisc:     true,
     };
 
-    let shutdown = Arc::new(AtomicBool::new(false));
-    register(SIGTERM, shutdown.clone())?;
-    register(SIGINT,  shutdown.clone())?;
-
     let client = Client::new(&email, &token, region)?;
 
-    let procs      = Procs::watch(kernel, code, shutdown.clone())?;
-    let mut links  = Links::watch(shutdown.clone())?;
-    let mut export = Export::new(client, &device, plan, procs.sockets())?;
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let (tx, rx) = channel(1_000);
+    let rt     = Runtime::new()?;
+    let handle = rt.handle().clone();
 
-    let (tx, rx) = bounded(1_000);
-    let mut sources = Sources::new(config, tx);
+    let mut procs = Procs::new(kernel, code)?;
+    procs.watch(shutdown.clone())?;
 
-    let timeout = Duration::from_millis(5);
+    let links = Links::watch(&handle, shutdown.clone())?;
+    let sink  = Sink::new(node.clone(), procs.sockets(), tx, handle);
 
-    while !shutdown.load(Ordering::Acquire) {
-        if let Ok(flows) = rx.recv_timeout(timeout) {
-            export.export(flows, node.clone())?;
+    rt.spawn(async move {
+        let sources = Sources::new(config, sink);
+        match sources.exec(links).await {
+            Ok(()) => debug!("source monitor finished"),
+            Err(e) => error!("source monitor failed: {:?}", e),
         }
+    });
 
-        while let Ok(Some(event)) = links.recv() {
-            match event {
-                Event::Add(add)       => sources.add(add)?,
-                Event::Delete(link)   => sources.del(link),
-                Event::Error(link, e) => warn!("link {} error: {}", link, e),
-            }
+    rt.spawn(async move {
+        match export(client, device, plan, rx).await {
+            Ok(()) => debug!("export finished"),
+            Err(e) => debug!("export failed: {:?}", e),
+        }
+    });
+
+    let mut signals = Signals::new(&[SIGINT, SIGTERM])?;
+    for signal in signals.forever() {
+        match signal {
+            SIGINT | SIGTERM => break,
+            _                => unreachable!(),
         }
     }
 
+    shutdown.store(true, Ordering::SeqCst);
+    rt.shutdown_timeout(Duration::from_secs(4));
+
+    Ok(())
+}
+
+async fn export(
+    client: Client,
+    device: String,
+    plan:   Option<u64>,
+    mut rx: Receiver<Vec<Record>>,
+) -> Result<()> {
+    let mut export = Export::new(client, &device, plan).await?;
+
+    while let Some(records) = rx.recv().await {
+        debug!("exporting {} flows", records.len());
+        match export.export(records).await {
+            Ok(()) => (),
+            Err(e) => warn!("export failed: {:?}", e),
+        }
+    }
     Ok(())
 }

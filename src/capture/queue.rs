@@ -1,31 +1,31 @@
 use std::collections::HashMap;
 use anyhow::Result;
-use crossbeam_channel::Sender;
 use log::warn;
 use pcap::Packet;
 use pnet::util::MacAddr;
 use time::Duration;
+use crate::collect::Sink;
 use super::{decode, Timestamp, timer::Timer};
 use super::flow::{Flow, Key};
-use crossbeam_channel::TrySendError::*;
+use tokio::sync::mpsc::error::TrySendError::*;
 
 pub struct Queue {
     queue:  HashMap<Key, Flow>,
     mac:    Option<MacAddr>,
     sample: u32,
     timer:  Timer,
-    tx:     Sender<Vec<Flow>>,
+    sink:   Sink,
     done:   bool,
 }
 
 impl Queue {
-    pub fn new(mac: Option<MacAddr>, sample: u32, tx: Sender<Vec<Flow>>, interval: Duration) -> Self {
+    pub fn new(mac: Option<MacAddr>, sample: u32, sink: Sink, interval: Duration) -> Self {
         Self {
             queue:  HashMap::new(),
             mac:    mac,
             sample: sample,
             timer:  Timer::new(interval),
-            tx:     tx,
+            sink:   sink,
             done:   false,
         }
     }
@@ -54,10 +54,10 @@ impl Queue {
                 flow
             }).collect();
 
-            match self.tx.try_send(flows) {
-                Ok(_)                => (),
-                Err(Full(_))         => warn!("capture channel full"),
-                Err(Disconnected(_)) => self.done = true,
+            match self.sink.dispatch(flows) {
+                Ok(())         => (),
+                Err(Closed(_)) => self.done = true,
+                Err(Full(_))   => warn!("dispatch queue full"),
             }
         }
     }
