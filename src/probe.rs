@@ -10,6 +10,7 @@ use signal_hook::{iterator::Signals, consts::signal::{SIGINT, SIGTERM}};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc::{Receiver, channel};
 use kentik_api::Client;
+use crate::hostname;
 use crate::args::{opt, read};
 use crate::capture::{self, Sample, Sources};
 use crate::collect::{Record, Sink};
@@ -18,7 +19,7 @@ use crate::link::Links;
 use crate::sockets::Procs;
 
 pub fn probe(args: &ArgMatches) -> Result<()> {
-    let node   = opt(args.value_of("node"))?.map(Arc::new);
+    let node   = opt(args.value_of("node"))?.or_else(|| hostname().ok());
     let email  = value_t!(args, "email",  String)?;
     let token  = value_t!(args, "token",  String)?;
     let device = value_t!(args, "device", String)?;
@@ -46,6 +47,7 @@ pub fn probe(args: &ArgMatches) -> Result<()> {
         promisc:     true,
     };
 
+    let node   = node.map(Arc::new);
     let client = Client::new(&email, &token, region)?;
 
     let shutdown = Arc::new(AtomicBool::new(false));

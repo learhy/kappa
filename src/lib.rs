@@ -13,6 +13,15 @@ pub mod os;
 pub mod packet;
 pub mod sockets;
 
+use anyhow::Result;
+use nix::unistd::gethostname;
+
+pub fn hostname() -> Result<String> {
+    let mut buf = [0u8; 256];
+    let cstr = gethostname(&mut buf)?;
+    Ok(cstr.to_string_lossy().to_string())
+}
+
 pub mod chf_capnp {
     include!(concat!(env!("OUT_DIR"), "/chf_capnp.rs"));
 }

@@ -8,6 +8,7 @@ use nixv::Version;
 use regex::Regex;
 use signal_hook::{iterator::Signals, consts::signal::{SIGINT, SIGTERM, SIGUSR1}};
 use tokio::runtime::Runtime;
+use crate::hostname;
 use crate::args::{opt, read};
 use crate::capture::{Config, Sample, Sources};
 use crate::collect::Collect;
@@ -16,7 +17,7 @@ use crate::sockets::Procs;
 
 pub fn agent(args: &ArgMatches) -> Result<()> {
     let agg      = value_t!(args, "agg", String)?;
-    let node     = opt(args.value_of("node"))?;
+    let node     = opt(args.value_of("node"))?.or_else(|| hostname().ok());
     let kernel   = args.value_of("kernel").and_then(Version::parse);
     let interval = value_t!(args, "interval", u64)?;
     let sample   = opt(args.value_of("sample"))?.unwrap_or(Sample::None);

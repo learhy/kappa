@@ -4,9 +4,9 @@ set -eu -o pipefail
 
 features=()
 
-if [ "$GITHUB_REF" = "refs/heads/next" ]; then
-    features+=("experimental")
-fi
+#if [ "$GITHUB_REF" = "refs/heads/next" ]; then
+#    features+=("experimental")
+#fi
 
 arguments=()
 
