@@ -17,6 +17,14 @@ pub struct CGroup {
     pub path:        String,
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Stats {
+    pub parent: pid_t,
+    pub uid:    u32,
+    pub pcpu:   f64,
+    pub pmem:   f64,
+}
+
 pub use procs::Procs;
 
 mod procs;

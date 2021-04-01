@@ -22,6 +22,8 @@ pub fn procs(device: &Device, node: &str, records: &[Process]) -> Result<Vec<u8>
 
     let app   = column("APP_PROTOCOL")?;
     let int00 = column("INT00")?;
+    let int01 = column("INT01")?;
+    let int02 = column("INT02")?;
     let str00 = column("STR00")?;
     let str01 = column("STR01")?;
 
@@ -29,15 +31,22 @@ pub fn procs(device: &Device, node: &str, records: &[Process]) -> Result<Vec<u8>
     let root = msg.init_root::<packed_c_h_f::Builder>();
     let mut msgs = root.init_msgs(records.len() as u32);
 
-    for (index, Process { pid, comm, .. }) in records.iter().enumerate() {
-        let msg = msgs.reborrow().get(index as u32);
-        let pid = u32::try_from(*pid).unwrap_or(0);
+    for (index, process) in records.iter().enumerate() {
+        let Process { pid, comm, .. } = &process;
 
-        let mut customs = Customs::new(msg.init_custom(4));
+        let pid   = u32::try_from(*pid).unwrap_or(0);
+        let stats = process.stats().unwrap_or_default();
+        let pcpu  = stats.pcpu as u32;
+        let pmem  = stats.pmem as u32;
+
+        let msg = msgs.reborrow().get(index as u32);
+        let mut customs = Customs::new(msg.init_custom(6));
 
         customs.next(app,   |v| v.set_uint32_val(4));
         customs.next(str00, |v| v.set_str_val(node));
         customs.next(int00, |v| v.set_uint32_val(pid));
+        customs.next(int01, |v| v.set_uint32_val(pcpu));
+        customs.next(int02, |v| v.set_uint32_val(pmem));
         customs.next(str01, |v| v.set_str_val(comm));
     }
 
