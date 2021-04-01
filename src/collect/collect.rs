@@ -9,24 +9,25 @@ use tokio::runtime::Handle;
 use tokio::time::sleep;
 use tokio_serde::{SymmetricallyFramed, formats::SymmetricalJson};
 use tokio_util::codec::{FramedWrite, LengthDelimitedCodec};
+use crate::agg::Request;
 use crate::sockets::Sockets;
 use super::{Record, Sink};
 
 pub struct Collect {
-    node:   Option<Arc<String>>,
-    tx:     Sender<Vec<Record>>,
+    node:   Arc<String>,
+    tx:     Sender<Request>,
     socks:  Arc<Sockets>,
     dump:   Arc<AtomicBool>,
     handle: Handle,
 }
 
 impl Collect {
-    pub fn new(agg: String, socks: Arc<Sockets>, handle: Handle, node: Option<String>) -> Self {
+    pub fn new(agg: String, socks: Arc<Sockets>, handle: Handle, node: String) -> Self {
         let dump = Arc::new(AtomicBool::new(false));
         let (tx, rx) = channel(1024);
         handle.spawn(dispatch(agg, rx, dump.clone()));
         Self {
-            node:   node.map(Arc::new),
+            node:   Arc::new(node),
             tx:     tx,
             socks:  socks,
             dump:   dump,
@@ -47,7 +48,7 @@ impl Collect {
     }
 }
 
-async fn dispatch(agg: String, mut rx: Receiver<Vec<Record>>, dump: Arc<AtomicBool>) {
+async fn dispatch(agg: String, mut rx: Receiver<Request>, dump: Arc<AtomicBool>) {
     loop {
         let sock = connect(&agg).await;
 
@@ -58,13 +59,15 @@ async fn dispatch(agg: String, mut rx: Receiver<Vec<Record>>, dump: Arc<AtomicBo
 
         let mut codec = SymmetricallyFramed::new(framed, format);
 
-        while let Some(recs) = rx.recv().await {
+        while let Some(req) = rx.recv().await {
             if dump.load(Ordering::SeqCst) {
-                debug!("collect state:");
-                recs.iter().for_each(print)
+                if let Request::Traffic(rs) = &req {
+                    debug!("collect state:");
+                    rs.iter().for_each(print)
+                }
             }
 
-            if let Err(e) = codec.send(recs).await {
+            if let Err(e) = codec.send(req).await {
                 warn!("write error: {}", e);
                 break;
             }

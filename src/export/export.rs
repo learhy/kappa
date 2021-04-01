@@ -21,7 +21,7 @@ impl Export {
 
     pub async fn export(&mut self, rs: Vec<Record>) -> Result<()> {
         for chunk in rs.chunks(16384) {
-            let msg = pack(&self.device, chunk)?;
+            let msg = pack::records(&self.device, chunk)?;
             let client = self.client.clone();
             let device = self.device.clone();
             send(client, device, msg).await;

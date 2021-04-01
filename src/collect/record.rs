@@ -3,7 +3,7 @@ use std::time::Duration;
 use serde::{Serialize, Deserialize};
 use crate::augment::Object;
 use crate::capture::Flow;
-use crate::sockets::Process;
+use crate::process::Process;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Record {

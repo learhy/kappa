@@ -4,6 +4,7 @@ use anyhow::Result;
 use clap::{ArgMatches, value_t};
 use futures::prelude::*;
 use log::{debug, error, warn};
+use serde::{Deserialize, Serialize};
 use signal_hook::{iterator::Signals, consts::signal::{SIGINT, SIGTERM, SIGUSR1}};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::runtime::Runtime;
@@ -16,6 +17,13 @@ use crate::augment::Augment;
 use crate::collect::Record;
 use crate::combine::Combine;
 use crate::export::get_or_create_device;
+use crate::process::Process;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Request {
+    Traffic(Vec<Record>),
+    Process(Arc<String>, Vec<Arc<Process>>),
+}
 
 pub fn agg(args: &ArgMatches) -> Result<()> {
     let email    = value_t!(args, "email",  String)?;
@@ -84,12 +92,15 @@ async fn agent(sock: TcpStream, combine: Arc<Combine>) -> Result<()> {
     let mut length = LengthDelimitedCodec::new();
     length.set_max_frame_length(32 * 1024 * 1024);
     let framed = FramedRead::new(sock, length);
-    let format = SymmetricalJson::<Vec<Record>>::default();
+    let format = SymmetricalJson::<Request>::default();
 
     let mut codec = SymmetricallyFramed::new(framed, format);
 
-    while let Some(rs) = codec.try_next().await? {
-        combine.combine(rs);
+    while let Some(req) = codec.try_next().await? {
+        match req {
+            Request::Traffic(rs)       => combine.combine(rs),
+            Request::Process(node, ps) => combine.record(node, ps),
+        }
     }
 
     Ok(())

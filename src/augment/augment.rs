@@ -10,7 +10,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_serde::{SymmetricallyFramed, formats::SymmetricalJson};
 use tokio_util::codec::{FramedRead, LengthDelimitedCodec};
 use crate::collect::Record;
-use crate::sockets::Process;
+use crate::process::Process;
 use super::object::{Object, Pod, Service, IP};
 
 pub struct Augment {

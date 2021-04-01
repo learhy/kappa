@@ -11,12 +11,13 @@ use crate::augment::Augment;
 use crate::capture::flow::{Addr, Key};
 use crate::collect::{Meta, Record};
 use crate::export::{pack, send};
-use crate::sockets::Process;
+use crate::process::Process;
 
 pub struct Combine {
     queue:   Mutex<HashMap<Key, Record>>,
     empty:   Mutex<HashMap<Key, Record>>,
     source:  Mutex<HashMap<Addr, Source>>,
+    procs:   Mutex<HashMap<String, Vec<Process>>>,
     client:  Arc<Client>,
     device:  Arc<Device>,
     dump:    AtomicBool,
@@ -37,6 +38,7 @@ impl Combine {
             queue:   Mutex::new(HashMap::new()),
             empty:   Mutex::new(HashMap::new()),
             source:  Mutex::new(HashMap::new()),
+            procs:   Mutex::new(HashMap::new()),
             client:  client,
             device:  Arc::new(device),
             dump:    AtomicBool::new(false),
@@ -66,6 +68,14 @@ impl Combine {
                 entry.flow.bytes   += r.flow.bytes;
                 entry.flow.packets += r.flow.packets;
             }).or_insert(r);
+        }
+    }
+
+    pub fn record(&self, node: Arc<String>, ps: Vec<Arc<Process>>) {
+        let node = Arc::try_unwrap(node);
+        let ps   = ps.into_iter().map(Arc::try_unwrap).collect();
+        if let (Ok(node), Ok(ps)) = (node, ps) {
+            self.procs.lock().insert(node, ps);
         }
     }
 
@@ -106,10 +116,21 @@ impl Combine {
         self.augment.merge(&mut rs);
 
         for chunk in rs.chunks(16384) {
-            let msg = pack(&self.device, chunk)?;
+            let msg = pack::records(&self.device, chunk)?;
             let client = self.client.clone();
             let device = self.device.clone();
             tokio::spawn(send(client, device, msg));
+        }
+
+        let procs = self.procs.lock().drain().collect::<Vec<_>>();
+
+        for (node, ps) in procs {
+            for chunk in ps.chunks(16384) {
+                let msg = pack::procs(&self.device, &node, chunk)?;
+                let client = self.client.clone();
+                let device = self.device.clone();
+                tokio::spawn(send(client, device, msg));
+            }
         }
 
         Ok(())

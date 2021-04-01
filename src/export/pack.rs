@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::net::IpAddr;
 use anyhow::{Result, anyhow};
 use capnp::{message::Builder, serialize_packed};
@@ -7,10 +8,47 @@ use kentik_api::Device;
 use crate::chf_capnp::*;
 use crate::capture::{Direction, Protocol};
 use crate::collect::Record;
+use crate::process::Process;
 use super::column::Columns;
 use super::custom::Customs;
 
-pub fn pack(device: &Device, records: &[Record]) -> Result<Vec<u8>> {
+pub fn procs(device: &Device, node: &str, records: &[Process]) -> Result<Vec<u8>> {
+    let column = |name: &str| {
+        match device.customs.iter().find(|c| c.name == name) {
+            Some(c) => Ok(c.id as u32),
+            None    => Err(anyhow!("missing custom column '{}'", name)),
+        }
+    };
+
+    let app   = column("APP_PROTOCOL")?;
+    let int00 = column("INT00")?;
+    let str00 = column("STR00")?;
+    let str01 = column("STR01")?;
+
+    let mut msg  = Builder::new_default();
+    let root = msg.init_root::<packed_c_h_f::Builder>();
+    let mut msgs = root.init_msgs(records.len() as u32);
+
+    for (index, Process { pid, comm, .. }) in records.iter().enumerate() {
+        let msg = msgs.reborrow().get(index as u32);
+        let pid = u32::try_from(*pid).unwrap_or(0);
+
+        let mut customs = Customs::new(msg.init_custom(4));
+
+        customs.next(app,   |v| v.set_uint32_val(4));
+        customs.next(str00, |v| v.set_str_val(node));
+        customs.next(int00, |v| v.set_uint32_val(pid));
+        customs.next(str01, |v| v.set_str_val(comm));
+    }
+
+    let mut vec = Vec::new();
+    vec.resize_with(80, Default::default);
+    serialize_packed::write_message(&mut vec, &msg)?;
+
+    Ok(vec)
+}
+
+pub fn records(device: &Device, records: &[Record]) -> Result<Vec<u8>> {
     let column = |name: &str| {
         match device.customs.iter().find(|c| c.name == name) {
             Some(c) => Ok(c.id as u32),

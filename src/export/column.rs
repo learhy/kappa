@@ -1,8 +1,9 @@
+use std::convert::TryInto;
 use std::sync::Arc;
 use log::trace;
 use crate::augment::{Object, Pod, Service};
 use crate::collect::Meta;
-use crate::sockets::Process;
+use crate::process::Process;
 
 pub struct Columns<'a> {
     pub proc: Option<Proc<'a>>,
@@ -74,10 +75,11 @@ impl<'a> Columns<'a> {
 
 impl<'a> Proc<'a> {
     fn new(proc: &'a Process) -> Self {
+        let pid       = proc.pid.try_into().unwrap_or(0);
         let cmdline   = proc.cmdline.join(" ");
         let container = proc.container.as_ref().map(String::as_str);
         Self {
-            pid:       proc.pid,
+            pid:       pid,
             comm:      &proc.comm,
             cmdline:   cmdline,
             container: container,

@@ -11,6 +11,7 @@ pub mod export;
 pub mod link;
 pub mod os;
 pub mod packet;
+pub mod process;
 pub mod sockets;
 
 use anyhow::Result;
